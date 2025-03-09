@@ -19,17 +19,22 @@
 #include <vector>
 #include "common/macros.h"
 #include "fmt/core.h"
+#include <mutex>
 
 namespace bustub {
 
 /** @brief Checks whether the container is empty. */
 SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::Empty() -> bool {
-  UNIMPLEMENTED("TODO(P0): Add implementation.");
+  //UNIMPLEMENTED("TODO(P0): Add implementation.");
+  std::shared_lock lock(rwlock_);
+  return size_ == 0;
 }
 
 /** @brief Returns the number of elements in the skip list. */
 SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::Size() -> size_t {
-  UNIMPLEMENTED("TODO(P0): Add implementation.");
+  //UNIMPLEMENTED("TODO(P0): Add implementation.");
+  std::shared_lock lock(rwlock_);
+  return size_;
 }
 
 /**
@@ -57,7 +62,12 @@ SKIPLIST_TEMPLATE_ARGUMENTS void SkipList<K, Compare, MaxHeight, Seed>::Drop() {
  * Note: You might want to use the provided `Drop` helper function.
  */
 SKIPLIST_TEMPLATE_ARGUMENTS void SkipList<K, Compare, MaxHeight, Seed>::Clear() {
-  UNIMPLEMENTED("TODO(P0): Add implementation.");
+  //UNIMPLEMENTED("TODO(P0): Add implementation.");
+  std::unique_lock lock(rwlock_);
+  Drop();
+  header_ = std::make_shared<SkipNode>(MaxHeight);
+  height_ = 1;
+  size_ = 0;
 }
 
 /**
@@ -69,7 +79,39 @@ SKIPLIST_TEMPLATE_ARGUMENTS void SkipList<K, Compare, MaxHeight, Seed>::Clear() 
  * @return true if the insertion is successful, false if the key already exists.
  */
 SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::Insert(const K &key) -> bool {
-  UNIMPLEMENTED("TODO(P0): Add implementation.");
+  //UNIMPLEMENTED("TODO(P0): Add implementation.");
+  std::unique_lock lock(rwlock_);
+  std::vector<std::shared_ptr<SkipNode>> update(MaxHeight, nullptr);
+  auto curr = header_;
+
+  // Search for insert position
+  for (int i = height_ - 1; i >= 0; i--) {
+    while (curr->Next(i) && compare_(curr->Next(i)->Key(), key)) {
+        curr = curr->Next(i);
+    }
+    update[i] = curr;
+  }
+    
+  curr = curr->Next(0);
+  if (curr && !compare_(key, curr->Key()) && !compare_(curr->Key(), key)) {
+    return false; // Key already exists
+  }
+
+  size_t new_height = RandomHeight();
+  if (new_height > height_) {
+    for (size_t i = height_; i < new_height; i++) {
+      update[i] = header_;
+    }
+    height_ = new_height;
+  }
+
+  auto new_node = std::make_shared<SkipNode>(new_height, key);
+  for (size_t i = 0; i < new_height; i++) {
+    new_node->SetNext(i, update[i]->Next(i));
+    update[i]->SetNext(i, new_node);
+  }
+  size_++;
+  return true;
 }
 
 /**
@@ -79,7 +121,33 @@ SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::Insert(c
  * @return bool true if the element got erased, false otherwise.
  */
 SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::Erase(const K &key) -> bool {
-  UNIMPLEMENTED("TODO(P0): Add implementation.");
+  //UNIMPLEMENTED("TODO(P0): Add implementation.");
+  std::unique_lock lock(rwlock_);
+  std::vector<std::shared_ptr<SkipNode>> update(MaxHeight, nullptr);
+  auto curr = header_;
+
+  for (int i = height_ - 1; i >= 0; i--) {
+    while (curr->Next(i) && compare_(curr->Next(i)->Key(), key)) {
+      curr = curr->Next(i);
+    }
+    update[i] = curr;
+  }
+  
+  curr = curr->Next(0);
+  if (!curr || compare_(key, curr->Key()) || compare_(curr->Key(), key)) {
+    return false; // Key not found
+  }
+
+  for (size_t i = 0; i < height_; i++) {
+    if (update[i]->Next(i) != curr) break;
+    update[i]->SetNext(i, curr->Next(i));
+  }
+  
+  while (height_ > 1 && !header_->Next(height_ - 1)) {
+    height_--;
+  }
+  size_--;
+  return true;
 }
 
 /**
@@ -91,7 +159,18 @@ SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::Erase(co
 SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::Contains(const K &key) -> bool {
   // Following the standard library: Key `a` and `b` are considered equivalent if neither compares less
   // than the other: `!compare_(a, b) && !compare_(b, a)`.
-  UNIMPLEMENTED("TODO(P0): Add implementation.");
+  //UNIMPLEMENTED("TODO(P0): Add implementation.");
+  std::shared_lock lock(rwlock_);
+  auto curr = header_;
+
+  for (int i = height_ - 1; i >= 0; i--) {
+    while (curr->Next(i) && compare_(curr->Next(i)->Key(), key)) {
+      curr = curr->Next(i);
+    }
+  }
+    
+  curr = curr->Next(0);
+  return curr && !compare_(key, curr->Key()) && !compare_(curr->Key(), key);
 }
 
 /**
@@ -126,7 +205,8 @@ SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::RandomHe
  * @brief Gets the current node height.
  */
 SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::SkipNode::Height() const -> size_t {
-  UNIMPLEMENTED("TODO(P0): Add implementation.");
+  //UNIMPLEMENTED("TODO(P0): Add implementation.");
+  return links_.size();
 }
 
 /**
@@ -137,7 +217,8 @@ SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::SkipNode
  */
 SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::SkipNode::Next(size_t level) const
     -> std::shared_ptr<SkipNode> {
-  UNIMPLEMENTED("TODO(P0): Add implementation.");
+  //UNIMPLEMENTED("TODO(P0): Add implementation.");
+  return links_[level];
 }
 
 /**
@@ -147,12 +228,14 @@ SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::SkipNode
  */
 SKIPLIST_TEMPLATE_ARGUMENTS void SkipList<K, Compare, MaxHeight, Seed>::SkipNode::SetNext(
     size_t level, const std::shared_ptr<SkipNode> &node) {
-  UNIMPLEMENTED("TODO(P0): Add implementation.");
+  //UNIMPLEMENTED("TODO(P0): Add implementation.");
+  links_[level] = node;
 }
 
 /** @brief Returns a reference to the key stored in the node. */
 SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::SkipNode::Key() const -> const K & {
-  UNIMPLEMENTED("TODO(P0): Add implementation.");
+  //UNIMPLEMENTED("TODO(P0): Add implementation.");
+  return key_;
 }
 
 // Below are explicit instantiation of template classes.
