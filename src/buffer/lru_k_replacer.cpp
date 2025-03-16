@@ -39,7 +39,58 @@ LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_fra
  *
  * @return true if a frame is evicted successfully, false if no frames can be evicted.
  */
-auto LRUKReplacer::Evict() -> std::optional<frame_id_t> { return std::nullopt; }
+auto LRUKReplacer::Evict() -> std::optional<frame_id_t> { 
+  std::lock_guard<std::mutex> lock(latch_);
+  frame_id_t victim = 0;
+  bool found = false;
+  size_t max_distance = 0;
+  size_t victim_oldest = 0;  // 用于在正无穷候选中进行 tie-break
+
+  for (auto it = node_store_.begin(); it != node_store_.end(); ++it) {
+    LRUKNode &node = it->second;
+    if (!node.is_evictable_) {
+      continue;
+    }
+    size_t distance;
+    // 如果访问历史为空，则取 0 作为最旧访问时间
+    size_t oldest_timestamp = (!node.history_.empty() ? node.history_.front() : 0);
+    if (node.history_.size() < k_) {
+      // 访问次数不足 k，视为正无穷
+      distance = std::numeric_limits<size_t>::max();
+    } else {
+      distance = current_timestamp_ - oldest_timestamp;
+    }
+    if (!found) {
+      victim = it->first;
+      max_distance = distance;
+      victim_oldest = oldest_timestamp;
+      found = true;
+    } else {
+      // 选择具有更大后向 k 距离的候选
+      if (distance > max_distance) {
+        victim = it->first;
+        max_distance = distance;
+        victim_oldest = oldest_timestamp;
+      } else if (distance == max_distance && distance == std::numeric_limits<size_t>::max()) {
+        // 当两个候选都为正无穷时，选择最久未使用的（队首时间戳更小者）
+        if (oldest_timestamp < victim_oldest) {
+          victim = it->first;
+          victim_oldest = oldest_timestamp;
+        }
+      }
+    }
+  }
+
+  if (!found) {
+    return std::nullopt;
+  }
+  // 成功驱逐后，移除该节点，并更新可驱逐计数
+  auto erased = node_store_.erase(victim);
+  if (erased > 0) {
+    curr_size_--;
+  }
+  return victim;
+}
 
 /**
  * TODO(P1): Add implementation
@@ -54,7 +105,29 @@ auto LRUKReplacer::Evict() -> std::optional<frame_id_t> { return std::nullopt; }
  * @param access_type type of access that was received. This parameter is only needed for
  * leaderboard tests.
  */
-void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {}
+void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {
+    std::lock_guard<std::mutex> lock(latch_);
+  if (frame_id >= replacer_size_) {
+    throw std::invalid_argument("frame_id is invalid");
+  }
+  current_timestamp_++;
+
+  auto it = node_store_.find(frame_id);
+  if (it == node_store_.end()) {
+    LRUKNode node;
+    node.fid_ = frame_id;
+    node.k_ = k_;
+    // 默认状态下为非可驱逐，需由 SetEvictable 显式设置
+    node.history_.push_back(current_timestamp_);
+    node_store_[frame_id] = std::move(node);
+  } else {
+    auto &node = it->second;
+    node.history_.push_back(current_timestamp_);
+    if (node.history_.size() > k_) {
+      node.history_.pop_front();
+    }
+  }
+}
 
 /**
  * TODO(P1): Add implementation
@@ -73,7 +146,33 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
  * @param frame_id id of frame whose 'evictable' status will be modified
  * @param set_evictable whether the given frame is evictable or not
  */
-void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {}
+void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
+    std::lock_guard<std::mutex> lock(latch_);
+  if (frame_id >= replacer_size_) {
+    throw std::invalid_argument("frame_id is invalid");
+  }
+  auto it = node_store_.find(frame_id);
+  if (it == node_store_.end()) {
+    LRUKNode node;
+    node.fid_ = frame_id;
+    node.k_ = k_;
+    node.is_evictable_ = set_evictable;
+    node_store_[frame_id] = std::move(node);
+    if (set_evictable) {
+      curr_size_++;
+    }
+  } else {
+    auto &node = it->second;
+    if (node.is_evictable_ != set_evictable) {
+      if (set_evictable) {
+        curr_size_++;
+      } else {
+        curr_size_--;
+      }
+      node.is_evictable_ = set_evictable;
+    }
+  }
+}
 
 /**
  * TODO(P1): Add implementation
@@ -92,7 +191,22 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {}
  *
  * @param frame_id id of frame to be removed
  */
-void LRUKReplacer::Remove(frame_id_t frame_id) {}
+void LRUKReplacer::Remove(frame_id_t frame_id) {
+    std::lock_guard<std::mutex> lock(latch_);
+  if (frame_id >= replacer_size_) {
+    throw std::invalid_argument("frame_id is invalid");
+  }
+  auto it = node_store_.find(frame_id);
+  if (it == node_store_.end()) {
+    return;
+  }
+  auto &node = it->second;
+  if (!node.is_evictable_) {
+    throw std::logic_error("Trying to remove a non-evictable frame");
+  }
+  node_store_.erase(it);
+  curr_size_--;
+}
 
 /**
  * TODO(P1): Add implementation
@@ -101,6 +215,7 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {}
  *
  * @return size_t
  */
-auto LRUKReplacer::Size() -> size_t { return 0; }
+auto LRUKReplacer::Size() -> size_t {  std::lock_guard<std::mutex> lock(latch_);
+    return curr_size_; }
 
 }  // namespace bustub
