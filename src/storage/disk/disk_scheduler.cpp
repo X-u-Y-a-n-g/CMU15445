@@ -27,6 +27,7 @@ DiskScheduler::DiskScheduler(DiskManager *disk_manager) : disk_manager_(disk_man
 }
 
 DiskScheduler::~DiskScheduler() {
+  stop_=true;stop_=true;
   // Put a `std::nullopt` in the queue to signal to exit the loop
   request_queue_.Put(std::nullopt);
   if (background_thread_.has_value()) {
@@ -41,7 +42,9 @@ DiskScheduler::~DiskScheduler() {
  *
  * @param r The request to be scheduled.
  */
-void DiskScheduler::Schedule(DiskRequest r) {}
+void DiskScheduler::Schedule(DiskRequest r) {
+  request_queue_.Put(std::move(r));
+}
 
 /**
  * TODO(P1): Add implementation
@@ -51,6 +54,29 @@ void DiskScheduler::Schedule(DiskRequest r) {}
  * The background thread needs to process requests while the DiskScheduler exists, i.e., this function should not
  * return until ~DiskScheduler() is called. At that point you need to make sure that the function does return.
  */
-void DiskScheduler::StartWorkerThread() {}
+void DiskScheduler::StartWorkerThread() {
+  while (!stop_) {
+    // 获取请求
+    auto request = request_queue_.Get();
+    if (!request.has_value()) {
+      break;
+    }
+    
+    // 处理请求
+    try {
+      if (request->is_write) {
+        disk_manager_->WritePage(request->page_id, request->data);
+      } else {
+        disk_manager_->ReadPage(request->page_id, request->data);
+      }
+      // 通知完成
+      if (request->callback) {
+        request->callback();
+      }
+    } catch (const std::exception &e) {
+      // 处理异常
+    }
+  }
+}
 
 }  // namespace bustub
