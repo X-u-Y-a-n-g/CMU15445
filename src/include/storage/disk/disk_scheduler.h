@@ -71,7 +71,7 @@ class DiskScheduler {
   /**
    * @brief Deallocates a page on disk.
    *
-   * Note: You should look at the documentation for `DeletePage` in `BufferPoolManager` before using this method.
+   * Note: You should look at the documentation for DeletePage in BufferPoolManager before using this method.
    * Also note: This is a no-op without a more complex data structure to track deallocated pages.
    *
    * @param page_id The page ID of the page to deallocate from disk.
@@ -82,7 +82,7 @@ class DiskScheduler {
   /** Pointer to the disk manager. */
   DiskManager *disk_manager_ __attribute__((__unused__));
   /** A shared queue to concurrently schedule and process requests. When the DiskScheduler's destructor is called,
-   * `std::nullopt` is put into the queue to signal to the background thread to stop execution. */
+   * std::nullopt is put into the queue to signal to the background thread to stop execution. */
   Channel<std::optional<DiskRequest>> request_queue_;
   /** The background thread responsible for issuing scheduled requests to the disk manager. */
   std::optional<std::thread> background_thread_;

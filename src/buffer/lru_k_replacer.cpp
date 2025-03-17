@@ -105,19 +105,19 @@ auto LRUKReplacer::Evict() -> std::optional<frame_id_t> {
  * @param access_type type of access that was received. This parameter is only needed for
  * leaderboard tests.
  */
-void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {
-    std::lock_guard<std::mutex> lock(latch_);
-  if (frame_id >= replacer_size_) {
+void LRUKReplacer::RecordAccess(frame_id_t frame_id, AccessType access_type) {
+  std::lock_guard<std::mutex> lock(latch_);
+  // 先判断是否为负，再将 frame_id 转为 size_t 进行比较
+  if (frame_id < 0 || static_cast<size_t>(frame_id) >= replacer_size_) {
     throw std::invalid_argument("frame_id is invalid");
   }
   current_timestamp_++;
-
+  // 记录访问历史等后续操作...
   auto it = node_store_.find(frame_id);
   if (it == node_store_.end()) {
     LRUKNode node;
     node.fid_ = frame_id;
     node.k_ = k_;
-    // 默认状态下为非可驱逐，需由 SetEvictable 显式设置
     node.history_.push_back(current_timestamp_);
     node_store_[frame_id] = std::move(node);
   } else {
@@ -147,8 +147,8 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
  * @param set_evictable whether the given frame is evictable or not
  */
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
-    std::lock_guard<std::mutex> lock(latch_);
-  if (frame_id >= replacer_size_) {
+  std::lock_guard<std::mutex> lock(latch_);
+  if (frame_id < 0 || static_cast<size_t>(frame_id) >= replacer_size_) {
     throw std::invalid_argument("frame_id is invalid");
   }
   auto it = node_store_.find(frame_id);
@@ -192,8 +192,8 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
  * @param frame_id id of frame to be removed
  */
 void LRUKReplacer::Remove(frame_id_t frame_id) {
-    std::lock_guard<std::mutex> lock(latch_);
-  if (frame_id >= replacer_size_) {
+  std::lock_guard<std::mutex> lock(latch_);
+  if (frame_id < 0 || static_cast<size_t>(frame_id) >= replacer_size_) {
     throw std::invalid_argument("frame_id is invalid");
   }
   auto it = node_store_.find(frame_id);
