@@ -160,7 +160,7 @@ void ReadPageGuard::Flush() {
     });
     
     // 等待刷盘完成
-    future.wait();
+    future.get();
     
     // 刷新后页面不再是脏页
     frame_->is_dirty_ = false;
@@ -191,7 +191,7 @@ void ReadPageGuard::Drop() {
   frame_->rwlatch_.unlock_shared();
 
   // 然后获取BPM锁更新状态信息
-  {
+  
     std::lock_guard<std::mutex> guard(*bpm_latch_);
 
     // 减少pin计数，确保pin_count不会低于0
@@ -199,11 +199,10 @@ void ReadPageGuard::Drop() {
       frame_->pin_count_--;
     }
 
-    // 如果pin计数为0，标记为可驱逐
-    if (frame_->pin_count_ == 0) {
-      replacer_->SetEvictable(frame_->frame_id_, true);
-    }
-  }
+    // 如果没人用这个页面了，就可以设置为可驱逐状态
+  replacer_->RecordAccess(frame_->frame_id_);
+  replacer_->SetEvictable(frame_->frame_id_, frame_->pin_count_.load() == 0);
+  
 }
 
 
@@ -362,7 +361,7 @@ void WritePageGuard::Flush() {
   });
   
   // 等待刷盘完成
-  future.wait();
+  future.get();
   
   // 刷新后页面不再是脏页
   frame_->is_dirty_ = false;
@@ -392,7 +391,7 @@ void WritePageGuard::Drop() {
   frame_->rwlatch_.unlock();
 
   // 然后获取BPM锁更新状态信息
-  {
+  
     std::lock_guard<std::mutex> guard(*bpm_latch_);
 
     // 减少pin计数，确保pin_count不会低于0
@@ -400,11 +399,11 @@ void WritePageGuard::Drop() {
       frame_->pin_count_--;
     }
 
-    // 如果pin计数为0，标记为可驱逐
-    if (frame_->pin_count_ == 0) {
-      replacer_->SetEvictable(frame_->frame_id_, true);
-    }
-  }
+    
+      replacer_->RecordAccess(frame_->frame_id_);
+      replacer_->SetEvictable(frame_->frame_id_, frame_->pin_count_.load() == 0);
+    
+  
 }
 
 /** @brief The destructor for `WritePageGuard`. This destructor simply calls `Drop()`. */

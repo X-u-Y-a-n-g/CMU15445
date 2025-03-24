@@ -121,8 +121,6 @@ auto BufferPoolManager::NewPage() -> page_id_t {
   std::scoped_lock lock(*bpm_latch_);
   page_id_t new_page_id = next_page_id_++;
 
-
-
   if (free_frames_.empty()) {
     auto evict_result = replacer_->Evict();
     if (!evict_result.has_value()) {
@@ -131,28 +129,30 @@ auto BufferPoolManager::NewPage() -> page_id_t {
     auto frame_id = evict_result.value();
     
     // 获取要被驱逐的页面的page_id
-    for (const auto &entry : page_table_) {
-      if (entry.second == frame_id) {
+    for (auto it = page_table_.begin(); it != page_table_.end(); ++it) {
+      if (it->second == frame_id) {
+        // 如果当前帧中的页面是脏页，需要先写回磁盘
         if (frames_[frame_id]->is_dirty_) {
           std::promise<bool> pro = disk_scheduler_->CreatePromise();
-              auto future = pro.get_future();
-    
-          DiskRequest req{};
-          req.is_write_ = true;
-          req.page_id_ = entry.first;  // 使用正确的page_id
-          req.data_ = frames_[frame_id]->GetDataMut();
+          auto future = pro.get_future();
+
+          // 创建写请求
+          DiskRequest req{true, const_cast<char *>(frames_[frame_id]->GetDataMut()), it->first, std::move(pro)};
+
+          // 发送调度请求
           disk_scheduler_->Schedule(std::move(req));
           future.get();  // 等待写操作完成
           frames_[frame_id]->is_dirty_ = false;
         }
-        page_table_.erase(entry.first);  // 使用正确的page_id
+        // 从页表中移除这个页面
+        page_table_.erase(it);
         break;
       }
     }
   page_table_[new_page_id] = frame_id;
   frames_[frame_id]->Reset();
-  frames_[frame_id]->pin_count_ = 1;
-  replacer_->RecordAccess(frame_id);
+  frames_[frame_id]->pin_count_.fetch_add(1);
+
   replacer_->SetEvictable(frame_id, false);
 
   return new_page_id;
