@@ -149,12 +149,11 @@ auto BufferPoolManager::NewPage() -> page_id_t {
         break;
       }
     }
-  page_table_[new_page_id] = frame_id;
+
   frames_[frame_id]->Reset();
   frames_[frame_id]->pin_count_.fetch_add(1);
-
   replacer_->SetEvictable(frame_id, false);
-
+  page_table_[new_page_id] = frame_id;
   return new_page_id;
 }
 // 如果有空闲帧，直接分配一个新的帧
@@ -166,7 +165,7 @@ page_table_[new_page_id] = frame_id;
 
 // 重置该帧的数据
 frames_[frame_id]->Reset();
-frames_[frame_id]->pin_count_.fetch_add(1);
+frames_[frame_id]->pin_count_.store(0);
 replacer_->SetEvictable(frame_id, false);
 
 return new_page_id;  // 返回新分配的页面 ID
@@ -285,9 +284,9 @@ if (it != page_table_.end()) {
   // 页面在内存中，增加pin_count并更新访问信息
   auto frame_id = it->second;
   auto frame = frames_[frame_id];
-  if(frame->pin_count_.load()==0){
+  //if(frame->pin_count_.load()==0){
       frame->pin_count_++;
-  }
+  //}
 
   
   // 记录访问
@@ -359,9 +358,10 @@ lock.unlock();  // 释放全局锁
 frames_[frame_id]->rwlatch_.lock();  // 获取页面的写锁
 
 // 更新页表和替换器
-page_table_[page_id] = frame_id;
+
 replacer_->RecordAccess(frame_id, access_type);
 replacer_->SetEvictable(frame_id, false);
+page_table_[page_id] = frame_id;
 return WritePageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_, disk_scheduler_);
 }
 /**
@@ -409,9 +409,9 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
     // 页面在内存中，增加pin_count并更新访问信息
     frame_id_t frame_id = it->second;
     auto frame = frames_[frame_id];
-    if (frame->pin_count_.load() == 0) {
+    //if (frame->pin_count_.load() == 0) {
       frame->pin_count_++;
-    }
+    //}
     
     // 记录访问
     replacer_->RecordAccess(frame_id, access_type);
@@ -484,9 +484,10 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
   frames_[frame_id]->rwlatch_.lock_shared();  // 获取页面的读锁
 
   // 更新页表和替换器
-  page_table_[page_id] = frame_id;
+
   replacer_->RecordAccess(frame_id, access_type);
   replacer_->SetEvictable(frame_id, false);
+  page_table_[page_id] = frame_id;
   return ReadPageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_, disk_scheduler_);
 }
 
@@ -562,7 +563,11 @@ auto BufferPoolManager::ReadPage(page_id_t page_id, AccessType access_type) -> R
  */
 auto BufferPoolManager::FlushPageUnsafe(page_id_t page_id) -> bool { 
   //UNIMPLEMENTED("TODO(P1): Add implementation."); 
-  std::scoped_lock lock(*bpm_latch_);
+    // 检查无效页面ID
+    if (page_id == INVALID_PAGE_ID) {
+      return false;
+    }
+  //std::scoped_lock lock(*bpm_latch_);
   auto it = page_table_.find(page_id);
   if (it == page_table_.end()) {
     return false;
@@ -570,11 +575,25 @@ auto BufferPoolManager::FlushPageUnsafe(page_id_t page_id) -> bool {
   auto frame_id = it->second;
   auto frame = frames_[frame_id];
   if (frame->is_dirty_) {
-    DiskRequest req;
-    req.is_write_ = true;
-    req.data_ = frame->GetDataMut();
-    req.page_id_ = page_id;
-    disk_scheduler_->Schedule(std::move(req));
+    std::promise<bool> promise = disk_scheduler_->CreatePromise();
+    auto future = promise.get_future();
+
+    disk_scheduler_->Schedule({
+      .is_write_ = true,
+      .data_ = frame->GetDataMut(),
+      .page_id_ = page_id,
+      .callback_ = std::move(promise)
+    });
+
+
+
+    // 等待写入完成
+    bool success = future.get();
+    if (!success) {
+      return false;
+    }
+
+    // 写入完成后更新脏页标记 
     frame->is_dirty_ = false;
   }
   return true;
@@ -600,6 +619,9 @@ auto BufferPoolManager::FlushPageUnsafe(page_id_t page_id) -> bool {
  */
 auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool { 
   //UNIMPLEMENTED("TODO(P1): Add implementation."); 
+  if (page_id == INVALID_PAGE_ID) {
+    return false;
+  }
   std::scoped_lock lock(*bpm_latch_);
   auto it = page_table_.find(page_id);
   if (it == page_table_.end()) {
@@ -650,7 +672,7 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
  */
 void BufferPoolManager::FlushAllPagesUnsafe() { 
   //UNIMPLEMENTED("TODO(P1): Add implementation."); 
-  std::scoped_lock lock(*bpm_latch_);
+  //std::scoped_lock lock(*bpm_latch_);
   for (const auto &entry : page_table_) {
     if (frames_[entry.second]->is_dirty_) {
       std::promise<bool> pro = disk_scheduler_->CreatePromise();

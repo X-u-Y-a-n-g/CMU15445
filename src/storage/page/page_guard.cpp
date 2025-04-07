@@ -187,8 +187,7 @@ void ReadPageGuard::Drop() {
   // 标记为无效，防止重复调用
   is_valid_ = false;
 
-  // 先释放读锁，避免死锁
-  frame_->rwlatch_.unlock_shared();
+
 
   // 然后获取BPM锁更新状态信息
   
@@ -201,8 +200,9 @@ void ReadPageGuard::Drop() {
 
     // 如果没人用这个页面了，就可以设置为可驱逐状态
   replacer_->RecordAccess(frame_->frame_id_);
-  replacer_->SetEvictable(frame_->frame_id_, frame_->pin_count_.load() == 0);
-  
+  replacer_->SetEvictable(frame_->frame_id_, frame_->pin_count_ == 0);
+    // 先释放读锁，避免死锁
+  frame_->rwlatch_.unlock_shared();
 }
 
 
@@ -387,8 +387,7 @@ void WritePageGuard::Drop() {
   // 标记为无效，防止重复调用
   is_valid_ = false;
 
-  // 先释放写锁，避免死锁
-  frame_->rwlatch_.unlock();
+
 
   // 然后获取BPM锁更新状态信息
   
@@ -401,9 +400,10 @@ void WritePageGuard::Drop() {
 
     
       replacer_->RecordAccess(frame_->frame_id_);
-      replacer_->SetEvictable(frame_->frame_id_, frame_->pin_count_.load() == 0);
+      replacer_->SetEvictable(frame_->frame_id_, frame_->pin_count_ == 0);
     
-  
+    // 先释放写锁，避免死锁
+  frame_->rwlatch_.unlock();
 }
 
 /** @brief The destructor for `WritePageGuard`. This destructor simply calls `Drop()`. */
