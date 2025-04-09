@@ -34,7 +34,16 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, page_id_t header_page_id, BufferPool
  * @return Returns true if this B+ tree has no keys and values.
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::IsEmpty() const -> bool { UNIMPLEMENTED("TODO(P2): Add implementation."); }
+auto BPLUSTREE_TYPE::IsEmpty() const -> bool { 
+  //UNIMPLEMENTED("TODO(P2): Add implementation."); 
+  // 获取头页面
+  auto guard = bpm_->ReadPage(header_page_id_);
+  auto root_page = guard.As<BPlusTreeHeaderPage>();
+  
+  // 如果根页面ID为INVALID_PAGE_ID，则树为空
+  return root_page->root_page_id_ == INVALID_PAGE_ID;
+
+}
 
 /*****************************************************************************
  * SEARCH
@@ -53,6 +62,54 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
   UNIMPLEMENTED("TODO(P2): Add implementation.");
   // Declaration of context instance. Using the Context is not necessary but advised.
   Context ctx;
+  // 参数检查和初始化
+  if (result == nullptr) {
+    return false;
+  }
+  result->clear();
+  
+  if (IsEmpty()) {
+    return false;
+  }
+
+  // 读取根页面
+  auto header_guard = bpm_->ReadPage(header_page_id_);
+  auto header_page = header_guard.As<BPlusTreeHeaderPage>();
+  auto page_guard = bpm_->ReadPage(header_page->root_page_id_);
+  auto tree_page = page_guard.As<BPlusTreePage>();
+
+  // 遍历查找目标key
+  while (!tree_page->IsLeafPage()) {
+    auto internal_page = page_guard.As<BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>>();
+    int index = 0;
+    // 线性查找第一个大于等于key的位置
+    while (index < internal_page->GetSize() - 1 && 
+           comparator_(internal_page->KeyAt(index), key) < 0) {
+      index++;
+    }
+
+    // 获取子节点页面
+    page_id_t child_page_id = internal_page->ValueAt(index);
+    page_guard = bpm_->ReadPage(child_page_id);
+    tree_page = page_guard.As<BPlusTreePage>();
+  }
+
+  // 在叶子节点中查找
+  auto leaf_page = page_guard.As<BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>>();
+  int index = 0;
+  // 线性查找目标key
+  while (index < leaf_page->GetSize() && 
+         comparator_(leaf_page->KeyAt(index), key) < 0) {
+    index++;
+  }
+
+  // 检查是否找到匹配的key
+  if (index < leaf_page->GetSize() && comparator_(leaf_page->KeyAt(index), key) == 0) {
+    result->push_back(leaf_page->ValueAt(index));
+    return true;
+  }
+
+  return false;
 }
 
 /*****************************************************************************

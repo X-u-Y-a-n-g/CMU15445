@@ -22,10 +22,35 @@ auto BPlusTreePage::IsLeafPage() const -> bool {
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
     return page_type_ == IndexPageType::LEAF_PAGE;    
 }
+auto BPlusTreePage::IsRootPage() const -> bool { 
+    return page_type_ == IndexPageType::INTERNAL_PAGE && parent_page_id_ == INVALID_PAGE_ID;
+}
 void BPlusTreePage::SetPageType(IndexPageType page_type) { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
     page_type_ = page_type;
 }
+auto BPlusTreePage::GetPageType() const -> IndexPageType { 
+    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
+    return page_type_;
+}
+
+void BPlusTreePage::SetParentPageId(page_id_t parent_id) { 
+    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
+    parent_page_id_ = parent_id;
+}
+void BPlusTreePage::SetPageId(page_id_t page_id) { 
+    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
+    page_id_ = page_id;
+}
+auto BPlusTreePage::GetParentPageId() const -> page_id_t { 
+    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
+    return parent_page_id_;
+}
+auto BPlusTreePage::GetPageId() const -> page_id_t { 
+    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
+    return page_id_;
+}
+
 
 /*
  * Helper methods to get/set size (number of key/value pairs stored in that
