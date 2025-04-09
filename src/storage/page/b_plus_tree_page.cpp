@@ -18,82 +18,28 @@ namespace bustub {
  * Helper methods to get/set page type
  * Page type enum class is defined in b_plus_tree_page.h
  */
-auto BPlusTreePage::IsLeafPage() const -> bool { 
-    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    return page_type_ == IndexPageType::LEAF_PAGE;
-}
-
-// 判断是否为根页面
-auto BPlusTreePage::IsRootPage() const -> bool { 
-    return parent_page_id_== INVALID_PAGE_ID;
- }
-
-void BPlusTreePage::SetPageType(IndexPageType page_type) { 
-    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    page_type_ = page_type;
-
-}
+auto BPlusTreePage::IsLeafPage() const -> bool { UNIMPLEMENTED("TODO(P2): Add implementation."); }
+void BPlusTreePage::SetPageType(IndexPageType page_type) { UNIMPLEMENTED("TODO(P2): Add implementation."); }
 
 /*
  * Helper methods to get/set size (number of key/value pairs stored in that
  * page)
  */
-auto BPlusTreePage::GetSize() const -> int {
-    // UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    return size_;
-}
-void BPlusTreePage::SetSize(int size) { 
-    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    size_ = size;
-}
-void BPlusTreePage::ChangeSizeBy(int amount) { 
-    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    size_ += amount;
-    
-}
+auto BPlusTreePage::GetSize() const -> int { UNIMPLEMENTED("TODO(P2): Add implementation."); }
+void BPlusTreePage::SetSize(int size) { UNIMPLEMENTED("TODO(P2): Add implementation."); }
+void BPlusTreePage::ChangeSizeBy(int amount) { UNIMPLEMENTED("TODO(P2): Add implementation."); }
 
 /*
  * Helper methods to get/set max size (capacity) of the page
  */
-auto BPlusTreePage::GetMaxSize() const -> int { 
-    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    return max_size_;
-}
-void BPlusTreePage::SetMaxSize(int size) { 
-    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    max_size_ = size;
-}
+auto BPlusTreePage::GetMaxSize() const -> int { UNIMPLEMENTED("TODO(P2): Add implementation."); }
+void BPlusTreePage::SetMaxSize(int size) { UNIMPLEMENTED("TODO(P2): Add implementation."); }
 
 /*
  * Helper method to get min page size
  * Generally, min page size == max page size / 2
  * But whether you will take ceil() or floor() depends on your implementation
  */
-auto BPlusTreePage::GetMinSize() const -> int { 
-    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    if (!IsLeafPage()) {
-        // 如果是根页面，则最少为1
-        return 1;
-    }
-    return (max_size_+1) / 2; 
-}
-
-/*
- * Helper methods to get/set parent page id
- */
-auto BPlusTreePage::GetParentPageId() const -> page_id_t { return parent_page_id_; }
-void BPlusTreePage::SetParentPageId(page_id_t parent_page_id) { parent_page_id_ = parent_page_id; }
-
-/*
- * Helper methods to get/set self page id
- */
-auto BPlusTreePage::GetPageId() const -> page_id_t { return page_id_; }
-void BPlusTreePage::SetPageId(page_id_t page_id) { page_id_ = page_id; }
-
-/*
- * Helper methods to set lsn
- */
-void BPlusTreePage::SetLSN(lsn_t lsn) { lsn_ = lsn; }
-
+auto BPlusTreePage::GetMinSize() const -> int { UNIMPLEMENTED("TODO(P2): Add implementation."); }
 
 }  // namespace bustub
