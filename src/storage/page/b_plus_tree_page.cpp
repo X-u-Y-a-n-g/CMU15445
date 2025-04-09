@@ -22,6 +22,12 @@ auto BPlusTreePage::IsLeafPage() const -> bool {
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
     return page_type_ == IndexPageType::LEAF_PAGE;
 }
+
+// 判断是否为根页面
+auto BPlusTreePage::IsRootPage() const -> bool { 
+    return parent_page_id_== INVALID_PAGE_ID;
+ }
+
 void BPlusTreePage::SetPageType(IndexPageType page_type) { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
     page_type_ = page_type;
@@ -34,7 +40,7 @@ void BPlusTreePage::SetPageType(IndexPageType page_type) {
  */
 auto BPlusTreePage::GetSize() const -> int {
     // UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    return
+    return size_;
 }
 void BPlusTreePage::SetSize(int size) { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
@@ -43,21 +49,6 @@ void BPlusTreePage::SetSize(int size) {
 void BPlusTreePage::ChangeSizeBy(int amount) { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
     size_ += amount;
-    // if (size_ < 0) {
-    //     size_ = 0;
-    // }
-    // if (size_ > GetMaxSize()) {
-    //     size_ = GetMaxSize();
-    // }
-    // if (size_ < GetMinSize()) {
-    //     size_ = GetMinSize();
-    // }
-    // if (size_ > INT_MAX) {
-    //     size_ = INT_MAX;
-    // }
-    // if (size_ < 0) {
-    //     size_ = 0;
-    // }
     
 }
 
@@ -80,7 +71,29 @@ void BPlusTreePage::SetMaxSize(int size) {
  */
 auto BPlusTreePage::GetMinSize() const -> int { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    return (max_size_ + 1) / 2;
+    if (!IsLeafPage()) {
+        // 如果是根页面，则最少为1
+        return 1;
+    }
+    return (max_size_+1) / 2; 
 }
+
+/*
+ * Helper methods to get/set parent page id
+ */
+auto BPlusTreePage::GetParentPageId() const -> page_id_t { return parent_page_id_; }
+void BPlusTreePage::SetParentPageId(page_id_t parent_page_id) { parent_page_id_ = parent_page_id; }
+
+/*
+ * Helper methods to get/set self page id
+ */
+auto BPlusTreePage::GetPageId() const -> page_id_t { return page_id_; }
+void BPlusTreePage::SetPageId(page_id_t page_id) { page_id_ = page_id; }
+
+/*
+ * Helper methods to set lsn
+ */
+void BPlusTreePage::SetLSN(lsn_t lsn) { lsn_ = lsn; }
+
 
 }  // namespace bustub

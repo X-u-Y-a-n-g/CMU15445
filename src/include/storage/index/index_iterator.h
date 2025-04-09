@@ -41,15 +41,6 @@ class IndexIterator {
 
  private:
   // add your own private member variables here
-  BufferPoolManager *buffer_pool_manager_;
-  page_id_t page_id_;    // 当前页面ID
-  int index_;            // 当前页面中的索引位置
-  
-  // 用于构造函数
-  IndexIterator(BufferPoolManager *bpm, page_id_t page_id, int index) 
-    : buffer_pool_manager_(bpm), page_id_(page_id), index_(index) {}
-
-
 };
 
 }  // namespace bustub

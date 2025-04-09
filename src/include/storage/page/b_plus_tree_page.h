@@ -63,11 +63,11 @@ class BPlusTreePage {
    */
  private:
   // Member variables, attributes that both internal and leaf page share
-  IndexPageType page_type_;
+  IndexPageType page_type_ __attribute__((__unused__));
   // Number of key & value pairs in a page
-  int size_;
+  int size_ __attribute__((__unused__));
   // Max number of key & value pairs in a page
-  int max_size_;
+  int max_size_ __attribute__((__unused__));
 };
 
 }  // namespace bustub
