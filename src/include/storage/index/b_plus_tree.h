@@ -86,7 +86,11 @@ class BPlusTree {
 
   // Insert a key-value pair into this B+ tree.
   auto Insert(const KeyType &key, const ValueType &value) -> bool;
-
+  template <typename T>
+  auto Split(T *node, page_id_t node_page_id) -> std::pair<KeyType, page_id_t>;
+  auto InsertIntoParent(BPlusTreePage *node, page_id_t node_page_id, const KeyType &key, page_id_t new_page_id) -> bool;
+  auto SplitLeafPage(LeafPage *leaf, page_id_t leaf_page_id) -> std::pair<KeyType, page_id_t>;
+  auto SplitInternalPage(InternalPage *internal, page_id_t internal_page_id) -> std::pair<KeyType, page_id_t>;
   // Remove a key and its value from this B+ tree.
   void Remove(const KeyType &key);
 

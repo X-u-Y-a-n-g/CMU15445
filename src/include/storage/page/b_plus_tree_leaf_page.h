@@ -64,7 +64,7 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   void SetKeyAt(int index, const KeyType &key);
   auto ValueIndex(const ValueType &value) const -> int;
   auto ValueAt(int index) const -> ValueType;
-
+  void SetValueAt(int index, const ValueType &value);
   /**
    * @brief For test only return a string representing all keys in
    * this leaf page formatted as "(key1,key2,key3,...)"

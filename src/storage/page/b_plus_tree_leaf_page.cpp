@@ -36,10 +36,11 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::Init(int max_size) {
   //UNIMPLEMENTED("TODO(P2): Add implementation."); 
   SetPageType(IndexPageType::LEAF_PAGE);
   SetSize(0);
+  SetMaxSize(max_size);
   SetPageId(INVALID_PAGE_ID);
   SetParentPageId(INVALID_PAGE_ID);
   SetNextPageId(INVALID_PAGE_ID);
-  SetMaxSize(max_size);
+  
 }
 
 /**
@@ -99,6 +100,14 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::ValueAt(int index) const -> ValueType {
   return rid_array_[index];
 }
 
+// 添加SetValueAt函数实现
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::SetValueAt(int index, const ValueType &value) {
+  if (index < 0 || index >= GetMaxSize()) {
+    throw Exception("Index out of bounds");
+  }
+  rid_array_[index] = value;
+}
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;
 template class BPlusTreeLeafPage<GenericKey<8>, RID, GenericComparator<8>>;
