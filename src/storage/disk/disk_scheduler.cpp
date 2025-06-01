@@ -57,32 +57,20 @@ void DiskScheduler::Schedule(DiskRequest r) {
  */
 void DiskScheduler::StartWorkerThread() {
   while (true) {
-    // 从队列中取出请求
-    auto request_opt = request_queue_.Get();
-    
-    // 如果取出的是 std::nullopt，表示调度器即将关闭
-    if (!request_opt.has_value()) {
-      break;
+    // 获取请求
+    auto cur_request = request_queue_.Get();
+    // 如果没有元素，说明为nullptr ，退出这个线程
+    if (!cur_request.has_value()) {
+      return;
     }
-
-    DiskRequest request = std::move(request_opt.value());
-    bool success = false;
-    
-    try {
-      if (request.is_write_) {
-        // 处理写请求
-        disk_manager_->WritePage(request.page_id_, request.data_);
-      } else {
-        // 处理读请求
-        disk_manager_->ReadPage(request.page_id_, request.data_);
-      }
-      success = true;
-    } catch (const std::exception &e) {
-      success = false;
+    // 处理任务,如果是写入操作
+    if (cur_request->is_write_) {
+      disk_manager_->WritePage(cur_request->page_id_, cur_request->data_);
+    } else {
+      disk_manager_->ReadPage(cur_request->page_id_, cur_request->data_);
     }
-    
-    // 通过 promise 让请求发起者知道操作完成
-    request.callback_.set_value(success);
+    // 处理完成后，设置promise的值为true
+    cur_request->callback_.set_value(true);
   }
 }
 

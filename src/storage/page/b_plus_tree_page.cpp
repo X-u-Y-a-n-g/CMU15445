@@ -20,37 +20,16 @@ namespace bustub {
  */
 auto BPlusTreePage::IsLeafPage() const -> bool { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    return page_type_ == IndexPageType::LEAF_PAGE;    
-}
-auto BPlusTreePage::IsRootPage() const -> bool { 
-    return page_type_ == IndexPageType::INTERNAL_PAGE && parent_page_id_ == INVALID_PAGE_ID;
+    return this->page_type_ == IndexPageType::LEAF_PAGE;    
 }
 void BPlusTreePage::SetPageType(IndexPageType page_type) { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    page_type_ = page_type;
+    this->page_type_ = page_type;
 }
 auto BPlusTreePage::GetPageType() const -> IndexPageType { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
     return page_type_;
 }
-
-void BPlusTreePage::SetParentPageId(page_id_t parent_id) { 
-    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    parent_page_id_ = parent_id;
-}
-void BPlusTreePage::SetPageId(page_id_t page_id) { 
-    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    page_id_ = page_id;
-}
-auto BPlusTreePage::GetParentPageId() const -> page_id_t { 
-    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    return parent_page_id_;
-}
-auto BPlusTreePage::GetPageId() const -> page_id_t { 
-    //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    return page_id_;
-}
-
 
 /*
  * Helper methods to get/set size (number of key/value pairs stored in that
@@ -58,15 +37,21 @@ auto BPlusTreePage::GetPageId() const -> page_id_t {
  */
 auto BPlusTreePage::GetSize() const -> int { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    return size_;
+    return this->size_;
 }
 void BPlusTreePage::SetSize(int size) { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    size_ = size;
+    if (size > this->max_size_) {
+        abort();
+    }
+    this->size_ = size;
 }
 void BPlusTreePage::ChangeSizeBy(int amount) { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    size_ += amount;
+    if (this->size_ + amount > GetMaxSize()) {
+        abort();
+    }
+    this->size_ += amount;
 }
 
 /*
@@ -74,11 +59,17 @@ void BPlusTreePage::ChangeSizeBy(int amount) {
  */
 auto BPlusTreePage::GetMaxSize() const -> int { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    return max_size_;
+    return this->max_size_;
 }
 void BPlusTreePage::SetMaxSize(int size) { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    max_size_ = size;
+    if (size <= 0) {
+        throw Exception("Max size must be greater than 0");
+    }
+    if (size > INT_MAX) {
+        throw Exception("Max size must be less than INT_MAX");
+    }
+    this->max_size_ = size;
 }
 
 /*
@@ -88,12 +79,7 @@ void BPlusTreePage::SetMaxSize(int size) {
  */
 auto BPlusTreePage::GetMinSize() const -> int { 
     //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-    // 对于内部节点,最小大小应该是 (max_size_/2),向上取整
-  // 对于叶子节点,最小大小应该是 (max_size_/2),向下取整
-  if (IsLeafPage()) {
-    return max_size_ / 2;
-  }
-  return (max_size_ + 1) / 2;
+    return (this->max_size_ + 1) / 2;
 }
 
 }  // namespace bustub

@@ -34,12 +34,10 @@ namespace bustub {
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::Init(int max_size) { 
   //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-  SetPageType(IndexPageType::LEAF_PAGE);
-  SetSize(0);
-  SetMaxSize(max_size);
-  SetPageId(INVALID_PAGE_ID);
-  SetParentPageId(INVALID_PAGE_ID);
-  SetNextPageId(INVALID_PAGE_ID);
+  this->SetPageType(IndexPageType::LEAF_PAGE);
+  this->SetSize(0);
+  this->SetMaxSize(max_size);
+  this->SetNextPageId(INVALID_PAGE_ID);
   
 }
 
@@ -55,7 +53,7 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetNextPageId() const -> page_id_t {
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) {
   //UNIMPLEMENTED("TODO(P2): Add implementation.");
-  next_page_id_ = next_page_id;
+  this->next_page_id_ = next_page_id;
 }
 
 /*
@@ -65,47 +63,24 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) {
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType { 
   //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-  if (index < 0 || index >= GetSize()) {
-    throw Exception("Index out of bounds");
-  }
   return key_array_[index];
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
   //UNIMPLEMENTED("TODO(P2): Add implementation.");
-  if (index < 0 || index >= GetSize()) {
-    throw Exception("Index out of bounds");
-  }
   key_array_[index] = key;
-}
-
-INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_LEAF_PAGE_TYPE::ValueIndex(const ValueType &value) const -> int {
-  //UNIMPLEMENTED("TODO(P2): Add implementation.");
-  for (int i = 0; i < GetSize(); i++) {
-    if (ValueAt(i) == value) {
-      return i;
-    }
-  }
-  return -1;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::ValueAt(int index) const -> ValueType {
   //UNIMPLEMENTED("TODO(P2): Add implementation.");
-  if (index < 0 || index >= GetSize()) {
-    throw Exception("Index out of bounds");
-  }
   return rid_array_[index];
 }
 
 // 添加SetValueAt函数实现
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::SetValueAt(int index, const ValueType &value) {
-  if (index < 0 || index >= GetMaxSize()) {
-    throw Exception("Index out of bounds");
-  }
   rid_array_[index] = value;
 }
 

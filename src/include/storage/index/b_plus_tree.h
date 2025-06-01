@@ -77,6 +77,12 @@ class BPlusTree {
   using LeafPage = BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>;
 
  public:
+  enum class Operation {
+    READ,    // 读操作
+    INSERT,  // 插入操作
+    DELETE,  // 删除操作
+  };
+
   explicit BPlusTree(std::string name, page_id_t header_page_id, BufferPoolManager *buffer_pool_manager,
                      const KeyComparator &comparator, int leaf_max_size = LEAF_PAGE_SLOT_CNT,
                      int internal_max_size = INTERNAL_PAGE_SLOT_CNT);
@@ -86,11 +92,6 @@ class BPlusTree {
 
   // Insert a key-value pair into this B+ tree.
   auto Insert(const KeyType &key, const ValueType &value) -> bool;
-  template <typename T>
-  auto Split(T *node, page_id_t node_page_id) -> std::pair<KeyType, page_id_t>;
-  auto InsertIntoParent(BPlusTreePage *node, page_id_t node_page_id, const KeyType &key, page_id_t new_page_id) -> bool;
-  auto SplitLeafPage(LeafPage *leaf, page_id_t leaf_page_id) -> std::pair<KeyType, page_id_t>;
-  auto SplitInternalPage(InternalPage *internal, page_id_t internal_page_id) -> std::pair<KeyType, page_id_t>;
   // Remove a key and its value from this B+ tree.
   void Remove(const KeyType &key);
 
@@ -100,6 +101,48 @@ class BPlusTree {
   // Return the page id of the root node
   auto GetRootPageId() -> page_id_t;
 
+  // 得到节点 pageNode  的 兄弟节点 的page _id  flag = 1(左) 2（右）
+  auto GetBrother(Context& ctx,page_id_t cur_node_id,int & flag) -> page_id_t ; 
+
+  // 叶子节点的 将旧节点向新节点分裂 分裂函数 返回 被分裂的节点的首元素,
+  auto leafSplit (page_id_t &old_node,page_id_t & new_node) -> KeyType;
+
+  // // 叶子节点的删除函数 ，将叶子节点中的 某一个键为 key 的节点（页面） 进行删除
+  // auto leafDelete(page_id_t & node , KeyType & key) ->bool;
+  
+  // // 将一个key - newpage 插入节点 node 
+  // auto leafInsert(page_id_t &node , KeyType key, ValueType newpage) ->bool;
+
+  // // 叶子节点的合并 将newnode 节点转移到old node上面,其余属性均没有修改
+  // auto leafMerge(page_id_t &old_node, page_id_t &new_node) ->bool;
+
+  // //内部节点的合并 ，将newnode合并到 old node上面没有修改属性
+  // auto interMerge( page_id_t &old_node, page_id_t &new_node) ->bool;
+
+    
+  // //在内部节点node上面 插入一个新的节点
+  // auto interInsert(page_id_t &node , KeyType key , ValueType value) ->bool;
+
+  // //在内部节点中删除 key 为key 所对应的元素
+  // auto interDelete( page_id_t &node , KeyType key) ->bool;
+
+
+  //找到应该插入的节点所对应的叶子节点；
+  auto FindLeafPage(Context &ctx, const KeyType &key, Operation op) -> LeafPage*;
+
+  //迭代插入 
+  auto InsertIntoParent(Context &ctx, page_id_t  left_page_id, const KeyType &middle_key, page_id_t right_page_id) ->bool;
+
+  //处理删除过程中的父节点
+  void HandleParentUnderflow(Context &ctx, page_id_t page_id);
+
+
+  // // 找到最小的key page_id中的所有叶子节点的最小值 
+  // auto FindMinimumKey(page_id_t page_id) -> KeyType ;
+  
+  void UpdateParentKeyAfterDeletion(Context &ctx, page_id_t parent_id, page_id_t deleted_child_id);
+
+  
   // Index iterator
   auto Begin() -> INDEXITERATOR_TYPE;
 
@@ -136,6 +179,12 @@ class BPlusTree {
   int leaf_max_size_;
   int internal_max_size_;
   page_id_t header_page_id_;
+
+
+  // // 用于控制访问的锁
+  // mutable std::shared_mutex tree_mutex_;
+  // mutable std::shared_mutex insert_mutex;
+  // mutable std::shared_mutex delete_mutex;
 };
 
 /**

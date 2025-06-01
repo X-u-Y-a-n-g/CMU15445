@@ -144,13 +144,12 @@ auto ReadPageGuard::IsDirty() const -> bool {
 void ReadPageGuard::Flush() { 
   //UNIMPLEMENTED("TODO(P1): Add implementation."); 
   BUSTUB_ENSURE(is_valid_, "tried to flush an invalid guard");
+  // 创建一个promise
+  auto promise = disk_scheduler_->CreatePromise();
+  auto future = promise.get_future();
     
   // 检查页面是否为脏页，只有脏页才需要刷盘
   if (frame_->is_dirty_) {
-    // 创建一个promise用于等待刷盘操作完成
-    auto promise = disk_scheduler_->CreatePromise();
-    auto future = promise.get_future();
-    
     // 使用disk_scheduler将页面刷新到磁盘
     disk_scheduler_->Schedule({
       .is_write_ = true,
@@ -180,29 +179,33 @@ void ReadPageGuard::Flush() {
  */
 void ReadPageGuard::Drop() { 
   //UNIMPLEMENTED("TODO(P1): Add implementation."); 
-  if (!is_valid_) {
+  if (!is_valid_ || frame_ == nullptr) {
     return;
   }
 
   // 标记为无效，防止重复调用
   is_valid_ = false;
 
+  // 减少pin计数
+  if (frame_->pin_count_ > 0) {
+    frame_->pin_count_--;
+  }
 
-
-  // 然后获取BPM锁更新状态信息
-  
-    std::lock_guard<std::mutex> guard(*bpm_latch_);
-
-    // 减少pin计数，确保pin_count不会低于0
-    if (frame_->pin_count_ > 0) {
-      frame_->pin_count_--;
-    }
-
-    // 如果没人用这个页面了，就可以设置为可驱逐状态
-  replacer_->RecordAccess(frame_->frame_id_);
-  replacer_->SetEvictable(frame_->frame_id_, frame_->pin_count_ == 0);
-    // 先释放读锁，避免死锁
+  // 先释放读锁，避免死锁
   frame_->rwlatch_.unlock_shared();
+  {
+    // 获取缓冲池管理器的锁
+    std::lock_guard<std::mutex> guard(*bpm_latch_);
+    // 访问页面
+    replacer_->RecordAccess(frame_->frame_id_);
+    // 更新页面的状态
+    replacer_->SetEvictable(frame_->frame_id_, frame_->pin_count_.load() == 0);
+  }
+  page_id_ = INVALID_PAGE_ID;
+  frame_ = nullptr;
+  replacer_ = nullptr;
+  bpm_latch_ = nullptr;
+  disk_scheduler_ = nullptr;
 }
 
 
@@ -265,10 +268,10 @@ disk_scheduler_(std::move(that.disk_scheduler_)),
 is_valid_(that.is_valid_) {
 that.is_valid_ = false;
 that.page_id_ = INVALID_PAGE_ID;
-  that.frame_ = nullptr;
-  that.replacer_ = nullptr;
-  that.bpm_latch_ = nullptr;
-  that.disk_scheduler_ = nullptr;
+that.frame_ = nullptr;
+that.replacer_ = nullptr;
+that.bpm_latch_ = nullptr;
+that.disk_scheduler_ = nullptr;
 }
 
 /**
@@ -352,13 +355,15 @@ void WritePageGuard::Flush() {
   auto promise = disk_scheduler_->CreatePromise();
   auto future = promise.get_future();
   
-  // 由于是WritePageGuard，需要将页面刷盘
-  disk_scheduler_->Schedule({
-    .is_write_ = true,
-    .data_ = frame_->GetDataMut(),
-    .page_id_ = page_id_,
-    .callback_ = std::move(promise)
-  });
+  if (frame_->is_dirty_) {
+    // 由于是WritePageGuard，需要将页面刷盘
+    disk_scheduler_->Schedule({
+      .is_write_ = true,
+      .data_ = frame_->GetDataMut(),
+      .page_id_ = page_id_,
+      .callback_ = std::move(promise)
+    });
+  }
   
   // 等待刷盘完成
   future.get();
@@ -387,23 +392,22 @@ void WritePageGuard::Drop() {
   // 标记为无效，防止重复调用
   is_valid_ = false;
 
-
-
-  // 然后获取BPM锁更新状态信息
-  
-    std::lock_guard<std::mutex> guard(*bpm_latch_);
-
-    // 减少pin计数，确保pin_count不会低于0
-    if (frame_->pin_count_ > 0) {
-      frame_->pin_count_--;
-    }
-
-    
-      replacer_->RecordAccess(frame_->frame_id_);
-      replacer_->SetEvictable(frame_->frame_id_, frame_->pin_count_ == 0);
-    
-    // 先释放写锁，避免死锁
+  // 减少pin计数
+  if (frame_->pin_count_ > 0) {
+    frame_->pin_count_--;
+  }
+  // 先释放写锁，避免死锁
   frame_->rwlatch_.unlock();
+  {
+    std::lock_guard<std::mutex> guard(*bpm_latch_);
+    replacer_->RecordAccess(frame_->frame_id_);
+    replacer_->SetEvictable(frame_->frame_id_, frame_->pin_count_.load() == 0);
+  }
+  page_id_ = INVALID_PAGE_ID;
+  frame_ = nullptr;
+  replacer_ = nullptr;
+  bpm_latch_ = nullptr;
+  disk_scheduler_ = nullptr;
 }
 
 /** @brief The destructor for `WritePageGuard`. This destructor simply calls `Drop()`. */

@@ -33,11 +33,9 @@ namespace bustub {
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Init(int max_size) { 
   //UNIMPLEMENTED("TODO(P2): Add implementation."); 
-  SetPageType(IndexPageType::INTERNAL_PAGE);
-  SetSize(0);
-  SetPageId(INVALID_PAGE_ID);
-  SetParentPageId(INVALID_PAGE_ID);
-  SetMaxSize(max_size);
+  this->SetPageType(IndexPageType::INTERNAL_PAGE);  
+  this->SetSize(0); 
+  this->SetMaxSize(max_size);
 }
 
 /**
@@ -50,7 +48,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Init(int max_size) {
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::KeyAt(int index) const -> KeyType {
   //UNIMPLEMENTED("TODO(P2): Add implementation.");
-  if (index <= 0 || index >= GetSize()) {
+  if (index <= 0 || index >= GetMaxSize()) {
     throw Exception("Index out of bounds");
   }
   return key_array_[index];
@@ -65,7 +63,7 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::KeyAt(int index) const -> KeyType {
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
   //UNIMPLEMENTED("TODO(P2): Add implementation.");
-  if (index <= 0 || index >= GetSize()) {
+  if (index <= 0 || index > GetMaxSize()) {
     throw Exception("Index out of bounds");
   }
   key_array_[index] = key;
@@ -95,6 +93,18 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetValueAt(int index, const ValueType &valu
   page_id_array_[index] = value;
 }
 
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueIndex(const ValueType &value) const -> int {
+  // UNIMPLEMENTED("TODO(P2): Add implementation.");
+  for(int i = 0; i< GetSize(); i++)
+  {
+    if (ValueAt(i) == value)
+    {
+      return i;
+    }
+  }  
+  return -1;  // 如果没有找到对应的value  就返回无效 的页面id
+}
 // valuetype for internalNode should be page id_t
 template class BPlusTreeInternalPage<GenericKey<4>, page_id_t, GenericComparator<4>>;
 template class BPlusTreeInternalPage<GenericKey<8>, page_id_t, GenericComparator<8>>;
