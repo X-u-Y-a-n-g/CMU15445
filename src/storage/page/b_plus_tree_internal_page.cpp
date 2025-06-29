@@ -87,7 +87,7 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const -> ValueType {
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetValueAt(int index, const ValueType &value) {
-  if (index < 0 || index >= GetSize()) {
+  if (index < 0 || index > GetMaxSize()) {
     throw Exception("Index out of bounds");
   }
   page_id_array_[index] = value;
