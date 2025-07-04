@@ -18,6 +18,8 @@
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/seq_scan_plan.h"
 #include "storage/table/tuple.h"
+#include "storage/table/table_iterator.h"
+#include "storage/table/table_heap.h"
 
 namespace bustub {
 
@@ -38,5 +40,12 @@ class SeqScanExecutor : public AbstractExecutor {
  private:
   /** The sequential scan plan node to be executed */
   const SeqScanPlanNode *plan_;
+
+  //change
+  /** 扫描的table iterator */
+  std::unique_ptr<TableIterator> table_iterator_;
+  /** 扫描过的table heap  */
+  TableHeap *table_heap_;
+
 };
 }  // namespace bustub
