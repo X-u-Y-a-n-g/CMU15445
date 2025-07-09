@@ -21,12 +21,25 @@ namespace bustub {
  *
  * @param frame_id The frame ID / index of the frame we are creating a header for.
  */
+/**
+ * @brief `FrameHeader` 的构造函数，将所有字段初始化为默认值。
+ *
+ * 有关更多信息，请参见 "buffer/buffer_pool_manager.h" 中 `FrameHeader` 的文档。
+ *
+ * @param frame_id 我们正在为其创建头的帧的ID/索引。
+ */
 FrameHeader::FrameHeader(frame_id_t frame_id) : frame_id_(frame_id), data_(BUSTUB_PAGE_SIZE, 0) { Reset(); }
 
 /**
  * @brief Get a raw const pointer to the frame's data.
  *
  * @return const char* A pointer to immutable data that the frame stores.
+ */
+/**
+ * @brief 获取指向帧数据的原始常量指针。只能读取，不能修改。
+ *
+ * @return const char* 指向帧存储的不可变数据的指针。
+ *
  */
 auto FrameHeader::GetData() const -> const char * { return data_.data(); }
 
@@ -35,11 +48,20 @@ auto FrameHeader::GetData() const -> const char * { return data_.data(); }
  *
  * @return char* A pointer to mutable data that the frame stores.
  */
+/**
+ * @brief 获取指向帧数据的原始可变指针。可以读取和修改。
+ *
+ * @return char* 指向帧存储的可变数据的指针。
+ */
 auto FrameHeader::GetDataMut() -> char * { return data_.data(); }
 
 /**
  * @brief Resets a `FrameHeader`'s member fields.
  */
+/**
+ * @brief 重置 `FrameHeader` 的成员字段。
+ */
+
 void FrameHeader::Reset() {
   std::fill(data_.begin(), data_.end(), 0);
   pin_count_.store(0);
@@ -66,6 +88,25 @@ void FrameHeader::Reset() {
  * @param k_dist The backward k-distance for the LRU-K replacer.
  * @param log_manager The log manager. Please ignore this for P1.
  */
+
+/**
+ * @brief 创建一个新的 `BufferPoolManager` 实例并初始化所有字段。
+ *
+ * 有关更多信息，请参见 "buffer/buffer_pool_manager.h" 中 `BufferPoolManager` 的文档。
+ *
+ * ### 实现
+ *
+ * 我们以一种与我们的参考解决方案相符的方式为您实现了构造函数。如果它不适合您的实现，您可以自由地更改您想要的任何内容。
+ *
+ * 但要警告一下！如果您偏离我们的指导太远，我们将更难帮助您。我们的建议是首先使用我们提供的基石来实现缓冲池管理器。
+ *
+ * 一旦您有了一个完全可工作的解决方案（所有Gradescope测试用例都通过了），那么您可以尝试更有趣的事情！
+ *
+ * @param num_frames 缓冲池的大小。
+ * @param disk_manager 磁盘管理器。
+ * @param k_dist LRU-K替换器的向后k距离。
+ * @param log_manager 日志管理器。请忽略P1的这个参数。
+ */
 BufferPoolManager::BufferPoolManager(size_t num_frames, DiskManager *disk_manager, size_t k_dist,
                                      LogManager *log_manager)
     : num_frames_(num_frames),
@@ -74,17 +115,17 @@ BufferPoolManager::BufferPoolManager(size_t num_frames, DiskManager *disk_manage
       replacer_(std::make_shared<LRUKReplacer>(num_frames, k_dist)),
       disk_scheduler_(std::make_shared<DiskScheduler>(disk_manager)),
       log_manager_(log_manager) {
-  // Not strictly necessary...
+  // 不是严格必要的...
   std::scoped_lock latch(*bpm_latch_);
 
   // Initialize the monotonically increasing counter at 0.
-  next_page_id_.store(0);
+  next_page_id_.store(0);  //  原子储存操作
 
   // Allocate all of the in-memory frames up front.
-  frames_.reserve(num_frames_);
+  frames_.reserve(num_frames_);  //  却包邮足够的内存
 
   // The page table should have exactly `num_frames_` slots, corresponding to exactly `num_frames_` frames.
-  page_table_.reserve(num_frames_);
+  page_table_.reserve(num_frames_);  // 确保内存
 
   // Initialize all of the frame headers, and fill the free frame list with all possible frame IDs (since all frames are
   // initially free).
@@ -96,11 +137,12 @@ BufferPoolManager::BufferPoolManager(size_t num_frames, DiskManager *disk_manage
 
 /**
  * @brief Destroys the `BufferPoolManager`, freeing up all memory that the buffer pool was using.
+ *
  */
 BufferPoolManager::~BufferPoolManager() = default;
 
 /**
- * @brief Returns the number of frames that this buffer pool manages.
+ * @brief Returns the number of frames that this buffer pool manages.返回此缓冲池管理的帧数。
  */
 auto BufferPoolManager::Size() const -> size_t { return num_frames_; }
 
@@ -116,8 +158,20 @@ auto BufferPoolManager::Size() const -> size_t { return num_frames_; }
  *
  * @return The page ID of the newly allocated page.
  */
-auto BufferPoolManager::NewPage() -> page_id_t { 
-  //UNIMPLEMENTED("TODO(P1): Add implementation."); 
+/**
+ * @brief 在磁盘上分配一个新页面。
+ *
+ * ### 实现
+ *
+ * 您将维护一个线程安全的、单调递增的计数器，形式为 `std::atomic<page_id_t>`。
+ * 有关更多信息，请参见[原子](https://en.cppreference.com/w/cpp/atomic/atomic)的文档。
+ *
+ * TODO(P1): 添加实现。
+ *
+ * @return 新分配页面的页面ID。
+ */
+auto BufferPoolManager::NewPage() -> page_id_t {
+  // UNIMPLEMENTED("TODO(P1): Add implementation.");
   //  加锁，确保线程安全
   std::unique_lock lock(*bpm_latch_);
 
@@ -173,8 +227,6 @@ auto BufferPoolManager::NewPage() -> page_id_t {
   return new_page_id;
 }
 
-  
-
 /**
  * @brief Removes a page from the database, both on disk and in memory.
  *
@@ -187,22 +239,40 @@ auto BufferPoolManager::NewPage() -> page_id_t {
  * function. You will probably want to implement this function _after_ you have implemented `CheckedReadPage` and
  * `CheckedWritePage`.
  *
- * Ideally, we would want to ensure that all space on disk is used efficiently. That would mean the space that deleted
- * pages on disk used to occupy should somehow be made available to new pages allocated by `NewPage`.
- *
- * If you would like to attempt this, you are free to do so. However, for this implementation, you are allowed to
- * assume you will not run out of disk space and simply keep allocating disk space upwards in `NewPage`.
- *
- * For (nonexistent) style points, you can still call `DeallocatePage` in case you want to implement something slightly
- * more space-efficient in the future.
+ * You should call `DeallocatePage` in the disk scheduler to make the space available for new pages.
  *
  * TODO(P1): Add implementation.
  *
  * @param page_id The page ID of the page we want to delete.
  * @return `false` if the page exists but could not be deleted, `true` if the page didn't exist or deletion succeeded.
  */
-auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool { 
-  //UNIMPLEMENTED("TODO(P1): Add implementation."); 
+/**
+ * @brief 从数据库中移除一个页面，包括磁盘和内存中的页面。
+ *
+ * 如果页面在缓冲池中被固定，此函数不执行任何操作并返回 `false`。否则，此函数
+ * 从磁盘和内存中移除页面（如果它仍在缓冲池中），返回 `true`。
+ *
+ * ### 实现
+ *
+ * 思考一个页面或页面的元数据可能存在的所有地方，并用它来指导您实现这个函数。
+ * 您可能想在实现了 `CheckedReadPage` 和 `CheckedWritePage` 之后实现这个函数。
+ *
+ * 理想情况下，我们希望确保磁盘上的所有空间都被高效使用。这意味着被删除页面在磁盘上
+ * 曾经占用的空间应该以某种方式提供给由 `NewPage` 分配的新页面使用。
+ *
+ * 如果您想尝试这样做，您可以自由尝试。但是，对于这个实现，您可以假设您不会用完磁盘空间，
+ * 并在 `NewPage` 中简单地持续向上分配磁盘空间。
+ *
+ * 为了（不存在的）风格分数，您仍然可以调用 `DeallocatePage`，以防您将来想实现稍微
+ * 更节省空间的东西。
+ *
+ * TODO(P1): 添加实现。
+ *
+ * @param page_id 我们想要删除的页面的页面ID。
+ * @return 如果页面存在但无法删除，则为 `false`；如果页面不存在或删除成功，则为 `true`。
+ */
+auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
+  // UNIMPLEMENTED("TODO(P1): Add implementation.");
   //  对缓冲池内部数据结构上锁，保证线程安全
   std::scoped_lock lock(*bpm_latch_);
 
@@ -274,8 +344,42 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
  * @return std::optional<WritePageGuard> An optional latch guard where if there are no more free frames (out of memory)
  * returns `std::nullopt`, otherwise returns a `WritePageGuard` ensuring exclusive and mutable access to a page's data.
  */
+/**
+ * @brief 获取对数据页面的可选写锁守卫。用户可以根据需要指定 `AccessType`。
+ *
+ * 如果无法将数据页面加载到内存中，此函数将返回 `std::nullopt`。
+ *
+ * 页面数据只能通过页面守卫访问。此 `BufferPoolManager` 的用户应该根据他们希望访问数据的
+ * 模式获取 `ReadPageGuard` 或 `WritePageGuard`，这确保了任何数据访问都是线程安全的。
+ *
+ * 一次只能有1个 `WritePageGuard` 读取/写入一个页面。这允许数据访问既可以是不可变的也可以是
+ * 可变的，这意味着拥有 `WritePageGuard` 的线程可以按照他们想要的方式操作页面的数据。
+ * 如果用户想要多个线程同时读取页面，他们必须使用 `CheckedReadPage` 获取 `ReadPageGuard`。
+ *
+ * ### 实现
+ *
+ * 您将需要实现3个主要情况。前两个相对简单：一个是当有大量可用内存时，另一个是当我们实际上
+ * 不需要执行任何额外的I/O时。思考这两种情况具体涉及什么。
+ *
+ * 第三种情况是最棘手的，即当我们没有任何_容易_可用的内存供我们使用时。缓冲池的任务是
+ * 找到它可以用来引入一个内存页面的内存，使用您之前实现的替换算法来找到可能被驱逐的帧。
+ *
+ * 一旦缓冲池确定了一个要驱逐的帧，可能需要进行多次I/O操作才能将我们想要的数据页面
+ * 带入到该帧中。
+ *
+ * 与 `CheckedReadPage` 可能会有很多共享代码，所以您可能会发现创建辅助函数很有用。
+ *
+ * 这两个函数是这个项目的关键，所以我们不会给您比这更多的提示。祝您好运！
+ *
+ * TODO(P1): 添加实现。
+ *
+ * @param page_id 我们想要写入的页面的ID。
+ * @param access_type 页面访问的类型。
+ * @return std::optional<WritePageGuard> 一个可选的闩锁守卫，如果没有更多的空闲帧（内存不足）
+ * 返回 `std::nullopt`，否则返回一个 `WritePageGuard`，确保对页面数据的独占和可变访问。
+ */
 auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_type) -> std::optional<WritePageGuard> {
-  //UNIMPLEMENTED("TODO(P1): Add implementation.");
+  // UNIMPLEMENTED("TODO(P1): Add implementation.");
   // 1. 在加锁之前先检查无效页面ID
   if (page_id == INVALID_PAGE_ID || page_id < 0 || page_id >= next_page_id_.load()) {
     return std::nullopt;
@@ -332,24 +436,28 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
   frame->Reset();
   frame->pin_count_ = 1;
 
-  // 从磁盘读取页面数据
-  auto promise = disk_scheduler_->CreatePromise();
-  auto future = promise.get_future();
-  disk_scheduler_->Schedule(
-      {.is_write_ = false, .data_ = frame->GetDataMut(), .page_id_ = page_id, .callback_ = std::move(promise)});
-  future.get();
-
-  // 6. 释放全局锁后，再对该页面加写锁
-  lock.unlock();
-  frame->rwlatch_.lock();
-
   // 更新页表以及替换器信息
   page_table_[page_id] = frame_id;
   replacer_->RecordAccess(frame_id, access_type);
   replacer_->SetEvictable(frame_id, false);
 
+  // 从磁盘读取页面数据
+  auto promise = disk_scheduler_->CreatePromise();
+  auto future = promise.get_future();
+  disk_scheduler_->Schedule(
+      {.is_write_ = false, .data_ = frame->GetDataMut(), .page_id_ = page_id, .callback_ = std::move(promise)});
+  
+
+  // 6. 释放全局锁后，再对该页面加写锁
+  lock.unlock();
+  future.get();
+  frame->rwlatch_.lock();
+
+
+
   return WritePageGuard(page_id, frame, replacer_, bpm_latch_, disk_scheduler_);
 }
+
 /**
  * @brief Acquires an optional read-locked guard over a page of data. The user can specify an `AccessType` if needed.
  *
@@ -374,8 +482,31 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
  * @return std::optional<ReadPageGuard> An optional latch guard where if there are no more free frames (out of memory)
  * returns `std::nullopt`, otherwise returns a `ReadPageGuard` ensuring shared and read-only access to a page's data.
  */
+/**
+ * @brief 获取对数据页面的可选读锁守卫。用户可以根据需要指定 `AccessType`。
+ *
+ * 如果无法将数据页面加载到内存中，此函数将返回 `std::nullopt`。
+ *
+ * 页面数据只能通过页面守卫访问。此 `BufferPoolManager` 的用户应该根据他们希望访问数据的
+ * 模式获取 `ReadPageGuard` 或 `WritePageGuard`，这确保了任何数据访问都是线程安全的。
+ *
+ * 可以有任意数量的 `ReadPageGuard` 在不同线程中同时读取同一个数据页面。
+ * 但是，所有数据访问必须是不可变的。如果用户想要改变页面的数据，他们必须使用
+ * `CheckedWritePage` 获取 `WritePageGuard`。
+ *
+ * ### 实现
+ *
+ * 请参阅 `CheckedWritePage` 的实现详情。
+ *
+ * TODO(P1): 添加实现。
+ *
+ * @param page_id 我们想要读取的页面的ID。
+ * @param access_type 页面访问的类型。
+ * @return std::optional<ReadPageGuard> 一个可选的闩锁守卫，如果没有更多的空闲帧（内存不足）
+ * 返回 `std::nullopt`，否则返回一个 `ReadPageGuard`，确保对页面数据的共享和只读访问。
+ */
 auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_type) -> std::optional<ReadPageGuard> {
-  //UNIMPLEMENTED("TODO(P1): Add implementation.");
+  // UNIMPLEMENTED("TODO(P1): Add implementation.");
   //  对无效页面ID的检查要在获取锁之前
   if (page_id == INVALID_PAGE_ID || page_id < 0 || page_id >= next_page_id_.load()) {
     return std::nullopt;
@@ -449,7 +580,6 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
   return ReadPageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_, disk_scheduler_);
 }
 
-
 /**
  * @brief A wrapper around `CheckedWritePage` that unwraps the inner value if it exists.
  *
@@ -464,14 +594,26 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
  * @param access_type The type of page access.
  * @return WritePageGuard A page guard ensuring exclusive and mutable access to a page's data.
  */
+/**
+ * @brief `CheckedWritePage` 的包装器，如果内部值存在，则解包该值。
+ *
+ * 如果 `CheckedWritePage` 返回 `std::nullopt`，**此函数中止整个进程。**
+ *
+ * 此函数应**仅**用于测试和舒适的目的。如果缓冲池管理器有可能耗尽内存，
+ * 则使用 `CheckedPageWrite` 允许您处理这种情况。
+ *
+ * 有关更多实现信息，请参阅 `CheckedPageWrite` 的文档。
+ *
+ * @param page_id 我们想要读取的页面的ID。
+ * @param access_type 页面访问的类型。
+ * @return WritePageGuard 一个页面守卫，确保对页面数据的独占和可变访问。
+ */
 auto BufferPoolManager::WritePage(page_id_t page_id, AccessType access_type) -> WritePageGuard {
   auto guard_opt = CheckedWritePage(page_id, access_type);
-
   if (!guard_opt.has_value()) {
     fmt::println(stderr, "\n`CheckedWritePage` failed to bring in page {}\n", page_id);
     std::abort();
   }
-
   return std::move(guard_opt).value();
 }
 
@@ -488,6 +630,20 @@ auto BufferPoolManager::WritePage(page_id_t page_id, AccessType access_type) -> 
  * @param page_id The ID of the page we want to read.
  * @param access_type The type of page access.
  * @return ReadPageGuard A page guard ensuring shared and read-only access to a page's data.
+ */
+/**
+ * @brief `CheckedReadPage` 的包装器，如果内部值存在，则解包该值。
+ *
+ * 如果 `CheckedReadPage` 返回 `std::nullopt`，**此函数中止整个进程。**
+ *
+ * 此函数应**仅**用于测试和人体工程学的目的。如果缓冲池管理器有可能耗尽内存，
+ * 则使用 `CheckedPageWrite` 允许您处理这种情况。
+ *
+ * 有关更多实现信息，请参阅 `CheckedPageRead` 的文档。
+ *
+ * @param page_id 我们想要读取的页面的ID。
+ * @param access_type 页面访问的类型。
+ * @return ReadPageGuard 一个页面守卫，确保对页面数据的共享和只读访问。
  */
 auto BufferPoolManager::ReadPage(page_id_t page_id, AccessType access_type) -> ReadPageGuard {
   auto guard_opt = CheckedReadPage(page_id, access_type);
@@ -519,8 +675,28 @@ auto BufferPoolManager::ReadPage(page_id_t page_id, AccessType access_type) -> R
  * @param page_id The page ID of the page to be flushed.
  * @return `false` if the page could not be found in the page table, otherwise `true`.
  */
-auto BufferPoolManager::FlushPageUnsafe(page_id_t page_id) -> bool { 
-  //UNIMPLEMENTED("TODO(P1): Add implementation."); 
+/**
+ * @brief 不安全地将页面的数据刷新到磁盘。
+ *
+ * 如果页面已被修改，此函数将页面的数据写入磁盘。如果给定的页面不在内存中，
+ * 此函数将返回 `false`。
+ *
+ * 在此函数中，您不应该对页面加锁。
+ * 这意味着您应该仔细考虑何时切换 `is_dirty_` 位。
+ *
+ * ### 实现
+ *
+ * 您可能想在完成 `CheckedReadPage` 和 `CheckedWritePage` 之后再实现此函数，
+ * 因为这样理解要做什么会容易得多。
+ *
+ * TODO(P1): 添加实现
+ *
+ * @param page_id 要刷新的页面的页面ID。
+ * @return 如果在页表中找不到页面，则为 `false`，否则为 `true`。
+ */
+auto BufferPoolManager::FlushPageUnsafe(page_id_t page_id) -> bool {
+  // UNIMPLEMENTED("TODO(P1): Add implementation.");
+
   // 检查页表中是否存在目标页面，如果不存在，说明该页面不在内存中，返回 false
   if (page_table_.find(page_id) == page_table_.end()) {
     return false;
@@ -570,8 +746,26 @@ auto BufferPoolManager::FlushPageUnsafe(page_id_t page_id) -> bool {
  * @param page_id The page ID of the page to be flushed.
  * @return `false` if the page could not be found in the page table, otherwise `true`.
  */
-auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool { 
-  //UNIMPLEMENTED("TODO(P1): Add implementation."); 
+/**
+ * @brief 安全地将页面的数据刷新到磁盘。
+ *
+ * 如果页面已被修改，此函数将页面的数据写入磁盘。如果给定的页面不在内存中，
+ * 此函数将返回 `false`。
+ *
+ * 在此函数中，您应该对页面加锁，以确保将一致的状态刷新到磁盘。
+ *
+ * ### 实现
+ *
+ * 您可能想在完成 `CheckedReadPage`、`CheckedWritePage` 和页面守卫中的 `Flush` 之后
+ * 再实现此函数，因为这样理解要做什么会容易得多。
+ *
+ * TODO(P1): 添加实现
+ *
+ * @param page_id 要刷新的页面的页面ID。
+ * @return 如果在页表中找不到页面，则为 `false`，否则为 `true`。
+ */
+auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
+  // UNIMPLEMENTED("TODO(P1): Add implementation.");
   //  对缓冲池内部数据结构上锁，确保对页表等数据结构的互斥访问
   std::scoped_lock lock(*bpm_latch_);
   return FlushPageUnsafe(page_id);
@@ -590,13 +784,25 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
  *
  * TODO(P1): Add implementation
  */
-void BufferPoolManager::FlushAllPagesUnsafe() { 
-  //UNIMPLEMENTED("TODO(P1): Add implementation."); 
+/**
+ * @brief 不安全地将内存中的所有页面数据刷新到磁盘。
+ *
+ * 在此函数中，您不应该对页面加锁。
+ * 这意味着您应该仔细考虑何时切换 `is_dirty_` 位。
+ *
+ * ### 实现
+ *
+ * 您可能想在完成 `CheckedReadPage`、`CheckedWritePage` 和 `FlushPage` 之后
+ * 再实现此函数，因为这样理解要做什么会容易得多。
+ *
+ * TODO(P1): 添加实现
+ */
+void BufferPoolManager::FlushAllPagesUnsafe() {
+  // UNIMPLEMENTED("TODO(P1): Add implementation.");
   // 遍历页表中的每个页面
   for (auto &entry : page_table_) {
     FlushPageUnsafe(entry.first);
   }
-
 }
 
 /**
@@ -611,8 +817,20 @@ void BufferPoolManager::FlushAllPagesUnsafe() {
  *
  * TODO(P1): Add implementation
  */
-void BufferPoolManager::FlushAllPages() { 
-  //UNIMPLEMENTED("TODO(P1): Add implementation."); 
+/**
+ * @brief 安全地将内存中的所有页面数据刷新到磁盘。
+ *
+ * 在此函数中，您应该对页面加锁，以确保将一致的状态刷新到磁盘。
+ *
+ * ### 实现
+ *
+ * 您可能想在完成 `CheckedReadPage`、`CheckedWritePage` 和 `FlushPage` 之后
+ * 再实现此函数，因为这样理解要做什么会容易得多。
+ *
+ * TODO(P1): 添加实现
+ */
+void BufferPoolManager::FlushAllPages() {
+  // UNIMPLEMENTED("TODO(P1): Add implementation.");
   //  首先锁住缓冲池管理器，确保遍历页表时数据结构不会被并发修改
   std::scoped_lock lock(*bpm_latch_);
   // 遍历页表中所有页面
@@ -645,8 +863,31 @@ void BufferPoolManager::FlushAllPages() {
  * @param page_id The page ID of the page we want to get the pin count of.
  * @return std::optional<size_t> The pin count if the page exists, otherwise `std::nullopt`.
  */
+/**
+ * @brief 检索页面的引用计数。如果页面不存在于内存中，返回 `std::nullopt`。
+ *
+ * 此函数是线程安全的。调用者可以在多线程环境中调用此函数，其中多个线程
+ * 访问同一页面。
+ *
+ * 此函数旨在用于测试目的。如果此函数实现不正确，它肯定会导致测试套件和自动评分器
+ * 出现问题。
+ *
+ * # 实现
+ *
+ * 我们将使用此函数来测试您的缓冲池管理器是否正确管理引用计数。由于 `FrameHeader` 中的
+ * `pin_count_` 字段是原子类型，您不需要对持有我们想要查看的页面的帧加锁。相反，您可以
+ * 简单地使用原子 `load` 安全地加载存储的值。但是，您仍然需要获取缓冲池闩锁。
+ *
+ * 再次，如果您不熟悉原子类型，请参阅C++官方文档
+ * [这里](https://en.cppreference.com/w/cpp/atomic/atomic)。
+ *
+ * TODO(P1): 添加实现
+ *
+ * @param page_id 我们想要获取引用计数的页面的页面ID。
+ * @return std::optional<size_t> 如果页面存在，则为引用计数，否则为 `std::nullopt`。
+ */
 auto BufferPoolManager::GetPinCount(page_id_t page_id) -> std::optional<size_t> {
-  //UNIMPLEMENTED("TODO(P1): Add implementation.");
+  // UNIMPLEMENTED("TODO(P1): Add implementation.");
   //  加锁保护缓冲池内部数据结构，确保对页表的访问不会发生竞争
   std::scoped_lock lock(*bpm_latch_);
 
@@ -663,4 +904,4 @@ auto BufferPoolManager::GetPinCount(page_id_t page_id) -> std::optional<size_t> 
   return frames_[frame_id]->pin_count_.load();
 }
 
-} // namespace bustub
+}  // namespace bustub

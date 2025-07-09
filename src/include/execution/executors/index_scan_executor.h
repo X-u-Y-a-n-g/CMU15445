@@ -13,6 +13,7 @@
 #pragma once
 
 #include <vector>
+#include <memory>
 
 #include "common/rid.h"
 #include "execution/executor_context.h"
@@ -42,24 +43,19 @@ class IndexScanExecutor : public AbstractExecutor {
   /** The index scan plan node to be executed. */
   const IndexScanPlanNode *plan_;
 
-  /** The B+ tree index */
-  BPlusTreeIndexForTwoIntegerColumn *tree_;
-  
-  /** The table heap */
+  /** The table heap to retrieve tuples from. */
   TableHeap *table_heap_;
   
-  /** Flag to indicate if this is a point lookup */
-  bool is_point_lookup_;
+  /** The index to scan. */
+  Index *index_;
   
-  /** Flag to indicate if the scan has been initialized */
-  bool is_initialized_;
+  /** Iterator for ordered scan. */
+  std::unique_ptr<BPlusTreeIndexIteratorForTwoIntegerColumn> iterator_;
   
-  /** Flag to indicate if we have finished scanning */
-  bool scan_finished_;
+  /** Results for point lookup. */
+  std::vector<RID> point_lookup_results_;
   
-  /** Current position for maintaining state between calls */
-  std::vector<RID> rids_;
-  size_t current_pos_;
-
+  /** Current index in point lookup results. */
+  size_t point_lookup_idx_{0};
 };
 }  // namespace bustub

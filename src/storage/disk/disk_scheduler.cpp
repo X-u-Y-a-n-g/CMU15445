@@ -18,16 +18,20 @@ namespace bustub {
 
 DiskScheduler::DiskScheduler(DiskManager *disk_manager) : disk_manager_(disk_manager) {
   // TODO(P1): remove this line after you have implemented the disk scheduler API
-  /*throw NotImplementedException(
-      "DiskScheduler is not implemented yet. If you have finished implementing the disk scheduler, please remove the "
-      "throw exception line in disk_scheduler.cpp.");
-*/
+  // TODO(P1): 实现磁盘调度器 API 后删除此行
+
+  // throw NotImplementedException(
+  //     "DiskScheduler is not implemented yet. If you have finished implementing the disk scheduler, please remove the
+  //     " "throw exception line in `disk_scheduler.cpp`.");
+
   // Spawn the background thread
+  // 启动后台线程
   background_thread_.emplace([&] { StartWorkerThread(); });
 }
 
 DiskScheduler::~DiskScheduler() {
-  // Put a std::nullopt in the queue to signal to exit the loop
+  // Put a `std::nullopt` in the queue to signal to exit the loop
+  // 在队列中放入 `std::nullopt` 以发出退出循环的信号
   request_queue_.Put(std::nullopt);
   if (background_thread_.has_value()) {
     background_thread_->join();
@@ -41,10 +45,16 @@ DiskScheduler::~DiskScheduler() {
  *
  * @param r The request to be scheduled.
  */
+/**
+ * TODO(P1): 添加实现
+ *
+ * @brief 调度 DiskManager 要执行的请求。
+ *
+ * @param r 要调度的请求。
+ */
 void DiskScheduler::Schedule(DiskRequest r) {
-  // 将请求放入队列，供后台线程处理
+  // 将请求放入队列
   request_queue_.Put(std::move(r));
-
 }
 
 /**
@@ -54,6 +64,14 @@ void DiskScheduler::Schedule(DiskRequest r) {
  *
  * The background thread needs to process requests while the DiskScheduler exists, i.e., this function should not
  * return until ~DiskScheduler() is called. At that point you need to make sure that the function does return.
+ */
+/**
+ * TODO(P1): 添加实现
+ *
+ * @brief 处理调度请求的后台工作线程函数。
+ *
+ * 后台线程需要在 DiskScheduler 存在期间处理请求，即此函数在 ~DiskScheduler() 被调用之前不应返回。
+ * 在那时，你需要确保函数确实返回。
  */
 void DiskScheduler::StartWorkerThread() {
   while (true) {

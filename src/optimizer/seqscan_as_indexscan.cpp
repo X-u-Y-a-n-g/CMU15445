@@ -21,148 +21,195 @@
 
 namespace bustub {
 
+
+// 辅助函数
+auto ExtractEqualityConditions(const AbstractExpression *expr, uint32_t target_column_idx) 
+    -> std::vector<Value> {
+  std::vector<Value> values;
+  
+  if (expr == nullptr) {
+    return values;
+  }
+  
+  // 处理比较表达式
+  if (auto comparison_expr = dynamic_cast<const ComparisonExpression *>(expr)) {
+    if (comparison_expr->comp_type_ == ComparisonType::Equal) {
+      auto left_expr = comparison_expr->GetChildAt(0).get();
+      auto right_expr = comparison_expr->GetChildAt(1).get();
+      
+      auto left_column = dynamic_cast<const ColumnValueExpression *>(left_expr);
+      auto right_column = dynamic_cast<const ColumnValueExpression *>(right_expr);
+      auto left_constant = dynamic_cast<const ConstantValueExpression *>(left_expr);
+      auto right_constant = dynamic_cast<const ConstantValueExpression *>(right_expr);
+      
+      // 检查 column = constant 的模式
+      if (left_column != nullptr && right_constant != nullptr && 
+          left_column->GetColIdx() == target_column_idx) {
+        values.push_back(right_constant->val_);
+      }
+      // 检查 constant = column 的模式
+      else if (right_column != nullptr && left_constant != nullptr && 
+               right_column->GetColIdx() == target_column_idx) {
+        values.push_back(left_constant->val_);
+      }
+    }
+  }
+  // 处理逻辑表达式（OR）
+  else if (auto logic_expr = dynamic_cast<const LogicExpression *>(expr)) {
+    if (logic_expr->logic_type_ == LogicType::Or) {
+      // 递归处理左右子表达式
+      auto left_values = ExtractEqualityConditions(logic_expr->GetChildAt(0).get(), target_column_idx);
+      auto right_values = ExtractEqualityConditions(logic_expr->GetChildAt(1).get(), target_column_idx);
+      
+      values.insert(values.end(), left_values.begin(), left_values.end());
+      values.insert(values.end(), right_values.begin(), right_values.end());
+    }
+  }
+  
+  return values;
+}
+
+auto IsIndexFriendly(const AbstractExpression *expr, uint32_t target_column_idx) -> bool {
+  if (expr == nullptr) {
+    return false;
+  }
+  
+  // 处理比较表达式
+  if (auto comparison_expr = dynamic_cast<const ComparisonExpression *>(expr)) {
+    if (comparison_expr->comp_type_ != ComparisonType::Equal) {
+      return false;
+    }
+    
+    auto left_expr = comparison_expr->GetChildAt(0).get();
+    auto right_expr = comparison_expr->GetChildAt(1).get();
+    
+    auto left_column = dynamic_cast<const ColumnValueExpression *>(left_expr);
+    auto right_column = dynamic_cast<const ColumnValueExpression *>(right_expr);
+    auto left_constant = dynamic_cast<const ConstantValueExpression *>(left_expr);
+    auto right_constant = dynamic_cast<const ConstantValueExpression *>(right_expr);
+    
+    // 检查是否为目标列的等值比较
+    if (left_column != nullptr && right_constant != nullptr) {
+      return left_column->GetColIdx() == target_column_idx;
+    }
+    if (right_column != nullptr && left_constant != nullptr) {
+      return right_column->GetColIdx() == target_column_idx;
+    }
+    return false;
+  }
+  // 处理逻辑表达式（OR）
+  else if (auto logic_expr = dynamic_cast<const LogicExpression *>(expr)) {
+    if (logic_expr->logic_type_ == LogicType::Or) {
+      // 检查左右子表达式是否都是索引友好的
+      return IsIndexFriendly(logic_expr->GetChildAt(0).get(), target_column_idx) &&
+             IsIndexFriendly(logic_expr->GetChildAt(1).get(), target_column_idx);
+    }
+  }
+  
+  return false;
+}
+
+
+
+
 /**
  * @brief optimize seq scan as index scan if there's an index on a table
  * @note Fall 2023 only: using hash index and only support point lookup
  */
 auto Optimizer::OptimizeSeqScanAsIndexScan(const bustub::AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
-  // TODO(student): implement seq scan with predicate -> index scan optimizer rule
+  // TODO(P3): implement seq scan with predicate -> index scan optimizer rule
   // The Filter Predicate Pushdown has been enabled for you in optimizer.cpp when forcing starter rule
-  // 递归优化子节点
+  
+  // 递归处理子节点
   std::vector<AbstractPlanNodeRef> children;
   for (const auto &child : plan->GetChildren()) {
     children.emplace_back(OptimizeSeqScanAsIndexScan(child));
   }
   auto optimized_plan = plan->CloneWithChildren(std::move(children));
-
-  // 检查是否为 SeqScan 节点
+  
+  // 检查当前节点是否为 SeqScanPlanNode
   if (optimized_plan->GetType() != PlanType::SeqScan) {
     return optimized_plan;
   }
-
+  
   const auto &seq_scan_plan = dynamic_cast<const SeqScanPlanNode &>(*optimized_plan);
   
-  // 检查是否有谓词
-  if (seq_scan_plan.filter_predicate_ == nullptr) {
+  // 获取表信息
+  auto table_info = catalog_.GetTable(seq_scan_plan.GetTableOid());
+  if (table_info == nullptr) {
     return optimized_plan;
   }
-
-  // 获取表的索引信息
-  auto table_info = catalog_.GetTable(seq_scan_plan.table_oid_);
-  auto indexes = catalog_.GetTableIndexes(table_info->name_);
   
+  // 检查是否有过滤条件
+  auto predicate = seq_scan_plan.filter_predicate_;
+  if (predicate == nullptr) {
+    return optimized_plan;
+  }
+  
+  // 查找表上的所有索引
+  auto indexes = catalog_.GetTableIndexes(table_info->name_);
   if (indexes.empty()) {
     return optimized_plan;
   }
-
-  // 分析谓词，查找适合的索引
-  for (const auto &index_info : indexes) {
-    auto key_attrs = index_info->key_schema_.GetColumns();
+  
+  // 尝试为每个单列索引找到匹配的条件
+  for (auto index_info : indexes) {
+    const auto &key_schema = index_info->key_schema_;
     
-    // 只支持单列索引的点查询
-    if (key_attrs.size() != 1) {
+    // 只处理单列索引
+    if (key_schema.GetColumns().size() != 1) {
       continue;
     }
     
-    auto column_idx = key_attrs[0].GetOffset();
+    const auto &index_column_name = key_schema.GetColumn(0).GetName();
     
-    // 检查谓词是否适合该索引
-    std::vector<Value> point_lookup_keys;
-    if (CanUseIndex(seq_scan_plan.filter_predicate_.get(), column_idx, &point_lookup_keys)) {
-      // 去重处理
-      std::sort(point_lookup_keys.begin(), point_lookup_keys.end());
-      point_lookup_keys.erase(std::unique(point_lookup_keys.begin(), point_lookup_keys.end()), 
-                             point_lookup_keys.end());
+    // 找到对应的表列索引
+    uint32_t column_idx = UINT32_MAX;
+    for (uint32_t i = 0; i < table_info->schema_.GetColumns().size(); ++i) {
+      if (table_info->schema_.GetColumn(i).GetName() == index_column_name) {
+        column_idx = i;
+        break;
+      }
+    }
+    
+    if (column_idx == UINT32_MAX) {
+      continue;
+    }
+    
+    // 检查谓词是否只包含该列的等值条件
+    if (!IsIndexFriendly(predicate.get(), column_idx)) {
+      continue;
+    }
+    
+    // 提取该列的等值条件
+    auto values = ExtractEqualityConditions(predicate.get(), column_idx);
+    
+    if (!values.empty()) {
+      // 创建pred_keys向量
+      std::vector<AbstractExpressionRef> pred_keys;
+      for (const auto &value : values) {
+        pred_keys.emplace_back(std::make_shared<ConstantValueExpression>(value));
+      }
       
-      // 创建 IndexScan 节点
+      // 创建 IndexScanPlanNode
       return std::make_shared<IndexScanPlanNode>(
           seq_scan_plan.output_schema_,
-          seq_scan_plan.table_oid_,
+          table_info->oid_,
           index_info->index_oid_,
-          seq_scan_plan.filter_predicate_,
-          &point_lookup_keys
+          nullptr,  // filter_predicate设为nullptr，因为索引扫描已经处理了过滤
+          std::move(pred_keys)
       );
     }
   }
-
+  
   return optimized_plan;
 }
 
-// 辅助函数：检查表达式是否可以使用索引
-auto Optimizer::CanUseIndex(const AbstractExpressionRef &expr, uint32_t column_idx, 
-                           std::vector<Value> *point_lookup_keys) -> bool {
-  if (expr == nullptr) {
-    return false;
-  }
 
-  // 处理比较表达式 (= 操作)
-  if (const auto *comp_expr = dynamic_cast<const ComparisonExpression *>(expr.get())) {
-    if (comp_expr->comp_type_ == ComparisonType::Equal) {
-      return HandleEqualityComparison(comp_expr, column_idx, point_lookup_keys);
-    }
-  }
-  
-  // 处理逻辑表达式 (OR 操作)
-  if (const auto *logic_expr = dynamic_cast<const LogicExpression *>(expr.get())) {
-    if (logic_expr->logic_type_ == LogicType::Or) {
-      return HandleOrExpression(logic_expr, column_idx, point_lookup_keys);
-    }
-  }
 
-  return false;
-}
 
-// 处理等值比较
-auto Optimizer::HandleEqualityComparison(const ComparisonExpression *comp_expr, uint32_t column_idx,
-                                        std::vector<Value> *point_lookup_keys) -> bool {
-  const auto *left_expr = comp_expr->GetChildAt(0).get();
-  const auto *right_expr = comp_expr->GetChildAt(1).get();
-  
-  // 检查 column = constant 模式
-  if (const auto *col_expr = dynamic_cast<const ColumnValueExpression *>(left_expr)) {
-    if (const auto *const_expr = dynamic_cast<const ConstantValueExpression *>(right_expr)) {
-      if (col_expr->GetColIdx() == column_idx) {
-        point_lookup_keys->push_back(const_expr->val_);
-        return true;
-      }
-    }
-  }
-  
-  // 检查 constant = column 模式（处理列顺序翻转的情况）
-  if (const auto *const_expr = dynamic_cast<const ConstantValueExpression *>(left_expr)) {
-    if (const auto *col_expr = dynamic_cast<const ColumnValueExpression *>(right_expr)) {
-      if (col_expr->GetColIdx() == column_idx) {
-        point_lookup_keys->push_back(const_expr->val_);
-        return true;
-      }
-    }
-  }
-  
-  return false;
-}
 
-// 处理 OR 表达式
-auto Optimizer::HandleOrExpression(const LogicExpression *logic_expr, uint32_t column_idx,
-                                  std::vector<Value> *point_lookup_keys) -> bool {
-  std::vector<Value> or_keys;
-  
-  // 检查所有 OR 子句是否都是对同一列的等值查询
-  for (const auto &child : logic_expr->GetChildren()) {
-    std::vector<Value> child_keys;
-    if (!CanUseIndex(child, column_idx, &child_keys)) {
-      return false;
-    }
-    
-    // 将子查询的键添加到总列表中
-    for (const auto &key : child_keys) {
-      or_keys.push_back(key);
-    }
-  }
-  
-  // 如果所有子句都适合索引，则合并结果
-  *point_lookup_keys = std::move(or_keys);
-  return true;
-}
+
 
 
 }  // namespace bustub

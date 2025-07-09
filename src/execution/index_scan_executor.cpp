@@ -21,119 +21,121 @@ namespace bustub {
  * @param plan the index scan plan to be executed
  */
 IndexScanExecutor::IndexScanExecutor(ExecutorContext *exec_ctx, const IndexScanPlanNode *plan)
-    : AbstractExecutor(exec_ctx), plan_(plan), tree_(nullptr), table_heap_(nullptr), 
-      is_point_lookup_(false), is_initialized_(false), scan_finished_(false), current_pos_(0) {}
-
-void IndexScanExecutor::Init() { 
-  // Reset state for potential re-initialization
-  rids_.clear();
-  current_pos_ = 0;
-  scan_finished_ = false;
-  is_initialized_ = false;
-  
-  // Get the index info from the catalog
-  auto index_info = exec_ctx_->GetCatalog()->GetIndex(plan_->GetIndexOid());
-  if (index_info == nullptr) {
-    return;
-  }
-  
-  // Cast to the specific B+ tree index type
-  tree_ = dynamic_cast<BPlusTreeIndexForTwoIntegerColumn *>(index_info->index_.get());
-  if (tree_ == nullptr) {
-    return;
-  }
-  
-  // Get the table info
-  auto table_info = exec_ctx_->GetCatalog()->GetTable(index_info->table_name_);
-  if (table_info == nullptr) {
-    return;
-  }
+    : AbstractExecutor(exec_ctx), plan_(plan) {
+  // 获取表信息
+  auto table_info = exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_);
   table_heap_ = table_info->table_.get();
   
-  // Check if this is a point lookup or ordered scan based on filter predicate
-  if (plan_->filter_predicate_ != nullptr) {
-    is_point_lookup_ = true;
-  } else {
-    is_point_lookup_ = false;
-  }
-  
-  is_initialized_ = true;
+  // 获取索引信息
+  auto index_info = exec_ctx_->GetCatalog()->GetIndex(plan_->index_oid_);
+  index_ = index_info->index_.get();
 }
 
-auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool { 
-  // Check if scan is initialized
-  if (!is_initialized_ || scan_finished_ || table_heap_ == nullptr || tree_ == nullptr) {
-    return false;
-  }
+void IndexScanExecutor::Init() {
+  // 将 Index* 转换为具体的 BPlusTreeIndex 类型
+  auto *bplus_tree_index = dynamic_cast<BPlusTreeIndexForTwoIntegerColumn *>(index_);
   
-  // Use a static approach to collect RIDs only once
-  static thread_local bool rids_collected = false;
-  static thread_local std::vector<RID> static_rids;
-  static thread_local size_t static_pos = 0;
-  static thread_local const void* last_tree_ptr = nullptr;
-  
-  // Reset if we're dealing with a different tree
-  if (last_tree_ptr != tree_) {
-    rids_collected = false;
-    static_rids.clear();
-    static_pos = 0;
-    last_tree_ptr = tree_;
-  }
-  
-  // Collect RIDs only once per tree
-  if (!rids_collected) {
-    static_rids.clear();
-    static_pos = 0;
+  // 检查是否有预测键（点查找模式）
+  if (!plan_->pred_keys_.empty()) {
+    // 对每个预测键执行点查找
+    point_lookup_results_.clear();
     
-    // Try to collect RIDs using a range-based approach
-    try {
-      // Use tree_->GetBeginIterator() directly in the loop to avoid copying
-      for (auto it = tree_->GetBeginIterator(); it != tree_->GetEndIterator(); ++it) {
-        static_rids.push_back((*it).second);
+    for (const auto &pred_key : plan_->pred_keys_) {
+      // 评估常量表达式
+      std::vector<Column> empty_columns;
+      Schema empty_schema(empty_columns);
+      auto value = pred_key->Evaluate(nullptr, empty_schema);
+      
+      // 创建索引键
+      std::vector<Value> key_values;
+      key_values.push_back(value);
+      Tuple index_key(key_values, bplus_tree_index->GetKeySchema());
+      
+      // 执行点查找
+      std::vector<RID> results;
+      bplus_tree_index->ScanKey(index_key, &results, exec_ctx_->GetTransaction());
+      
+      // 将结果添加到总结果中
+      point_lookup_results_.insert(point_lookup_results_.end(), results.begin(), results.end());
+    }
+    
+    point_lookup_idx_ = 0;
+  } else if (plan_->filter_predicate_ != nullptr) {
+    // 从过滤条件中提取键值（单个点查找）
+    std::vector<Column> empty_columns;
+    Schema empty_schema(empty_columns);
+    auto value = plan_->filter_predicate_->Evaluate(nullptr, empty_schema);
+    std::vector<Value> key_values;
+    key_values.push_back(value);
+    Tuple index_key(key_values, bplus_tree_index->GetKeySchema());
+    
+    // 执行点查找
+    std::vector<RID> results;
+    bplus_tree_index->ScanKey(index_key, &results, exec_ctx_->GetTransaction());
+    
+    // 存储查找结果
+    point_lookup_results_ = std::move(results);
+    point_lookup_idx_ = 0;
+  } else {
+    // 有序扫描模式：使用索引迭代器
+    iterator_.reset(new BPlusTreeIndexIteratorForTwoIntegerColumn(bplus_tree_index->GetBeginIterator()));
+  }
+}
+
+auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
+  auto *bplus_tree_index = dynamic_cast<BPlusTreeIndexForTwoIntegerColumn *>(index_);
+  
+  if (!plan_->pred_keys_.empty() || plan_->filter_predicate_ != nullptr) {
+    // 点查找模式
+    while (point_lookup_idx_ < point_lookup_results_.size()) {
+      RID current_rid = point_lookup_results_[point_lookup_idx_++];
+      
+      // 从表中获取元组
+      auto [meta, table_tuple] = table_heap_->GetTuple(current_rid);
+      
+      // 检查元组是否被删除
+      if (meta.is_deleted_) {
+        continue;
       }
-      rids_collected = true;
-    } catch (...) {
-      scan_finished_ = true;
+      
+      // 返回找到的元组
+      *tuple = std::move(table_tuple);
+      *rid = current_rid;
+      return true;
+    }
+    return false;
+  } else {
+    // 有序扫描模式
+    if (iterator_ == nullptr || iterator_->IsEnd()) {
       return false;
     }
-  }
-  
-  // Return tuples from static RIDs
-  while (static_pos < static_rids.size()) {
-    auto current_rid = static_rids[static_pos];
-    static_pos++;
     
-    try {
-      // Get the tuple from the table heap using the RID
-      auto [tuple_meta, current_tuple] = table_heap_->GetTuple(current_rid);
+    while (!iterator_->IsEnd()) {
+      // 获取当前键值对
+      auto current_pair = **iterator_;
+      RID current_rid = current_pair.second;
       
-      // Check if the tuple is not deleted
-      if (!tuple_meta.is_deleted_) {
-        // Evaluate the predicate if it exists (for point lookup)
-        if (plan_->filter_predicate_ != nullptr) {
-          auto value = plan_->filter_predicate_->Evaluate(&current_tuple, plan_->OutputSchema());
-          if (value.IsNull() || !value.GetAs<bool>()) {
-            continue; // Skip this tuple if predicate is false or null
-          }
-        }
-        
-        // Return the tuple and RID
-        *tuple = current_tuple;
-        *rid = current_rid;
-        return true;
+      // 移动到下一个位置
+      ++(*iterator_);
+      
+      // 从表中获取元组
+      auto [meta, table_tuple] = table_heap_->GetTuple(current_rid);
+      
+      // 检查元组是否被删除
+      if (meta.is_deleted_) {
+        continue;
       }
-    } catch (...) {
-      // Skip invalid RIDs
-      continue;
+      
+      // 返回找到的元组
+      *tuple = std::move(table_tuple);
+      *rid = current_rid;
+      return true;
     }
+    return false;
   }
-  
-  // Reset for next scan
-  rids_collected = false;
-  static_rids.clear();
-  static_pos = 0;
-  scan_finished_ = true;
-  return false;
 }
 
+
 }  // namespace bustub
+
+
